@@ -7,7 +7,7 @@ interface Order {
   farmer: string;
   products: string[];
   total: number;
-  status: 'new' | 'in_discussion' | 'processing' | 'approved' | 'completed' | 'cancelled';
+  status: 'pending' | 'accepted' | 'rejected' | 'in_discussion' | 'completed';
   date: string;
 }
 
@@ -21,15 +21,13 @@ export function OrderTable({ orders, onStatusChange }: OrderTableProps) {
     switch (status) {
       case 'completed':
         return <CheckCircle className="h-5 w-5 text-green-500" />;
-      case 'cancelled':
+      case 'rejected':
         return <XCircle className="h-5 w-5 text-red-500" />;
       case 'in_discussion':
         return <MessageCircle className="h-5 w-5 text-yellow-500" />;
-      case 'processing':
-        return <Package className="h-5 w-5 text-blue-500" />;
-      case 'approved':
+      case 'accepted':
         return <CheckCircle className="h-5 w-5 text-blue-500" />;
-      default:
+      default: // pending
         return <Clock className="h-5 w-5 text-gray-500" />;
     }
   };
@@ -38,15 +36,13 @@ export function OrderTable({ orders, onStatusChange }: OrderTableProps) {
     switch (status) {
       case 'completed':
         return 'bg-green-100 text-green-800';
-      case 'cancelled':
+      case 'rejected':
         return 'bg-red-100 text-red-800';
       case 'in_discussion':
         return 'bg-yellow-100 text-yellow-800';
-      case 'processing':
-        return 'bg-blue-100 text-blue-800';
-      case 'approved':
+      case 'accepted':
         return 'bg-indigo-100 text-indigo-800';
-      default:
+      default: // pending
         return 'bg-gray-100 text-gray-800';
     }
   };
@@ -115,12 +111,11 @@ export function OrderTable({ orders, onStatusChange }: OrderTableProps) {
                       onChange={(e) => onStatusChange(order.id, e.target.value as Order['status'])}
                       className={`ml-2 text-sm rounded-full px-2 py-1 ${getStatusColor(order.status)}`}
                     >
-                      <option value="new">New</option>
+                      <option value="pending">Pending</option>
                       <option value="in_discussion">In Discussion</option>
-                      <option value="processing">Processing</option>
-                      <option value="approved">Approved</option>
+                      <option value="accepted">Accepted</option>
                       <option value="completed">Completed</option>
-                      <option value="cancelled">Cancelled</option>
+                      <option value="rejected">Rejected</option>
                     </select>
                   ) : (
                     <span className={`px-2 py-1 text-xs rounded-full ${getStatusColor(order.status)}`}>

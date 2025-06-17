@@ -7,6 +7,8 @@ interface AuthContextType {
   loading: boolean;
   signIn: (email: string, password: string) => Promise<void>;
   signOut: () => Promise<void>;
+  getUserRole: () => string | null;
+  hasRole: (requiredRole: string | string[]) => boolean;
   // Add other auth methods as needed
 }
 
@@ -44,11 +46,31 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     if (error) throw error;
   };
 
+  const getUserRole = () => {
+    if (!user) return null;
+    return user.app_metadata?.role || 'buyer'; // Default to 'buyer' if no role is set
+  };
+
+  const hasRole = (requiredRole: string | string[]) => {
+    if (!user) return false;
+    
+    const userRole = user.app_metadata?.role;
+    if (!userRole) return false;
+    
+    if (Array.isArray(requiredRole)) {
+      return requiredRole.includes(userRole);
+    }
+    
+    return userRole === requiredRole;
+  };
+
   const value = {
     user,
     loading,
     signIn,
-    signOut
+    signOut,
+    getUserRole,
+    hasRole
   };
 
   return (
@@ -65,3 +87,4 @@ export const useAuth = () => {
   }
   return context;
 };
+

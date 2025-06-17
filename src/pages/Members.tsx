@@ -9,13 +9,6 @@ import {
   DialogHeader,
   DialogFooter,
 } from '../components/ui/dialog';
-import {
-  DropdownMenu,
-  DropdownMenuTrigger,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
-} from '../components/ui/dropdown-menu';
 import { useNavigate } from 'react-router-dom';
 import { useAuthStore } from '../store/authStore';
 import { supabase } from '../supabaseClient';
@@ -29,6 +22,8 @@ interface Member {
   location: string;
   joinDate: string;
   lastActive: string;
+  defaultMode: 'buyer' | 'seller' | 'both';
+  role?: 'user' | 'admin' | 'super_admin';
 }
 
 
@@ -42,6 +37,7 @@ export function Members() {
   const [members, setMembers] = useState<Member[]>([]);
   const [loading, setLoading] = useState(true);
   const [showEditModal, setShowEditModal] = useState(false);
+  const [showRoleModal, setShowRoleModal] = useState(false);
   const [expandedRowId, setExpandedRowId] = useState<string | null>(null);
   const [editForm, setEditForm] = useState({
     name: '',
@@ -50,39 +46,65 @@ export function Members() {
     city: '',
     state: '',
   });
+  const [selectedRole, setSelectedRole] = useState<'user' | 'admin' | 'super_admin'>('user');
 
 
   useEffect(() => {
     const fetchMembers = async () => {
+      try {
+        // First, get users from the database
+        const { data: usersData, error: usersError } = await supabase
+          .from('users')
+          .select('id, full_name, email, mobile_phone, country, state, city, created_at');
 
-      const { data, error } = await supabase
-        .from('users')
-        .select('id, full_name, email, mobile_phone, country, state, city, created_at')
+        if (usersError) {
+          console.error('Failed to fetch members:', usersError);
+          setLoading(false);
+          return;
+        }
 
-      console.log('Fetched users:', data);
+        // Then, get auth users to fetch roles (only super admin can do this)
+        let authUsers: any[] = [];
+        if (user?.role === 'super_admin') {
+          try {
+            const { data: authData, error: authError } = await supabase.auth.admin.listUsers();
+            if (!authError && authData?.users) {
+              authUsers = authData.users;
+            }
+          } catch (err) {
+            console.log('Could not fetch auth users:', err);
+          }
+        }
 
-      if (error) {
-        console.error('Failed to fetch members:', error);
-      } else {
-        const formatted = data.map((row) => ({
-          id: row.id,
-          name: row.full_name,
-          email: row.email,
-          phone: row.mobile_phone,
-          status: 'active' as 'active',
+        const formatted = usersData.map((row) => {
+          // Find corresponding auth user to get role
+          const authUser = authUsers.find(au => au.id === row.id);
+          const userRole = authUser?.app_metadata?.role || 'user';
 
-          location: `${row.city}, ${row.state}`,
-          joinDate: row.created_at,
-          lastActive: row.created_at // Replace with real last activity if available
-        }));
+          return {
+            id: row.id,
+            name: row.full_name || 'Unknown',
+            email: row.email || '',
+            phone: row.mobile_phone || '',
+            status: 'active' as 'active',
+            location: `${row.city || ''}, ${row.state || ''}`,
+            joinDate: row.created_at,
+            lastActive: row.created_at,
+            defaultMode: 'buyer' as 'buyer', // or set based on your logic/data
+            role: userRole as 'user' | 'admin' | 'super_admin'
+          };
+        });
+
         setMembers(formatted);
+      } catch (err) {
+        console.error('Error fetching members:', err);
+      } finally {
+        setLoading(false);
       }
-
-      setLoading(false);
     };
 
     fetchMembers();
-  }, []);
+  }, [user?.role]);
 
 
   const getStatusIcon = (status: Member['status']) => {
@@ -171,14 +193,73 @@ export function Members() {
     }
   };
 
-  const testDropdown = () => {
-    console.log("Dropdown clicked");
+  const handleRoleChange = async (memberId: string, newRole: 'user' | 'admin' | 'super_admin') => {
+    try {
+      // Only super admin can change roles
+      if (user?.role !== 'super_admin') {
+        alert('Only Super Admins can assign roles.');
+        return;
+      }
+
+      // Update role in Supabase auth
+      const { error } = await supabase.auth.admin.updateUserById(memberId, {
+        app_metadata: { role: newRole }
+      });
+
+      if (error) {
+        console.error('Error updating user role:', error);
+        alert('Failed to update user role.');
+        return;
+      }
+
+      // Update local state
+      setMembers(members.map(member =>
+        member.id === memberId ? { ...member, role: newRole } : member
+      ));
+
+      alert(`User role updated to ${newRole} successfully.`);
+      setShowRoleModal(false);
+      setSelectedMember(null);
+    } catch (err) {
+      console.error('Error updating role:', err);
+      alert('Failed to update user role.');
+    }
+  };
+
+  const getRoleColor = (role: string) => {
+    switch (role) {
+      case 'super_admin':
+        return 'bg-purple-100 text-purple-800';
+      case 'admin':
+        return 'bg-blue-100 text-blue-800';
+      default:
+        return 'bg-gray-100 text-gray-800';
+    }
+  };
+
+  const getRoleLabel = (role: string) => {
+    switch (role) {
+      case 'super_admin':
+        return 'Super Admin';
+      case 'admin':
+        return 'Admin';
+      default:
+        return 'User';
+    }
   };
 
   return (
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row justify-between items-center gap-4">
-        <h2 className="text-2xl font-semibold text-gray-900">Members</h2>
+        <div>
+          <h2 className="text-2xl font-semibold text-gray-900">Members</h2>
+          {user?.role === 'super_admin' && (
+            <p className="text-sm text-gray-600 mt-1">
+              <Crown className="inline h-4 w-4 mr-1" />
+              You can assign user roles as a Super Admin
+            </p>
+          )}
+        </div>
         <div className="flex items-center gap-3">
           <Button variant="outline" size="sm" className="hidden md:flex items-center gap-2">
             Export Members
@@ -225,6 +306,9 @@ export function Members() {
                   <div className="text-xs font-medium text-gray-500 uppercase tracking-wider">Location</div>
                 </th>
                 <th className="px-6 py-3 text-left">
+                  <div className="text-xs font-medium text-gray-500 uppercase tracking-wider">Role</div>
+                </th>
+                <th className="px-6 py-3 text-left">
                   <div className="text-xs font-medium text-gray-500 uppercase tracking-wider">Status</div>
                 </th>
                 <th className="px-6 py-3 text-left">
@@ -256,6 +340,11 @@ export function Members() {
                     <div className="text-sm text-gray-900">{member.location}</div>
                   </td>
                   <td className="px-6 py-4">
+                    <span className={`px-2 py-1 text-xs font-medium rounded-full ${getRoleColor(member.role ?? '')}`}>
+                      {getRoleLabel(member.role ?? '')}
+                    </span>
+                  </td>
+                  <td className="px-6 py-4">
                     <div className="flex items-center gap-2">
                       {getStatusIcon(member.status)}
                       <Badge
@@ -273,7 +362,7 @@ export function Members() {
                   </td>
                   <td className="px-6 py-4 text-center">
                     {expandedRowId === member.id ? (
-                      <div className="flex justify-center gap-2">
+                      <div className="flex justify-center gap-2 flex-wrap">
                         <Button
                           variant="outline"
                           size="sm"
@@ -292,6 +381,22 @@ export function Members() {
                         >
                           Edit
                         </Button>
+
+                        {user?.role === 'super_admin' && (
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => {
+                              setSelectedMember(member);
+                              setSelectedRole(member.role ?? 'user');
+                              setShowRoleModal(true);
+                            }}
+                            className="flex items-center gap-1"
+                          >
+                            <Crown className="h-3 w-3" />
+                            Role
+                          </Button>
+                        )}
 
                         <Button
                           variant="outline"
@@ -495,6 +600,99 @@ export function Members() {
               </DialogFooter>
             </form>
           )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Role Assignment Modal */}
+      <Dialog open={showRoleModal} onOpenChange={setShowRoleModal}>
+        <DialogContent>
+          <DialogHeader>
+            <h3 className="text-lg font-semibold">Assign User Role</h3>
+          </DialogHeader>
+          {selectedMember && (
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Member Name
+                </label>
+                <input
+                  type="text"
+                  value={selectedMember.name}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md bg-gray-50"
+                  disabled
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Email
+                </label>
+                <input
+                  type="email"
+                  value={selectedMember.email}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md bg-gray-50"
+                  disabled
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Current Role
+                </label>
+                <div className="mb-3">
+                  <span className={`px-2 py-1 text-xs font-medium rounded-full ${getRoleColor(selectedMember.role ?? '')}`}>
+                    {getRoleLabel(selectedMember.role ?? '')}
+                  </span>
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  New Role
+                </label>
+                <select
+                  value={selectedRole}
+                  onChange={(e) => setSelectedRole(e.target.value as 'user' | 'admin' | 'super_admin')}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md"
+                >
+                  <option value="user">User</option>
+                  <option value="admin">Admin</option>
+                  <option value="super_admin">Super Admin</option>
+                </select>
+              </div>
+
+              <div className="bg-yellow-50 border border-yellow-200 rounded-md p-3">
+                <p className="text-sm text-yellow-800">
+                  <strong>Warning:</strong> Changing user roles will affect their access permissions.
+                  Admin users can manage members and orders, while Super Admins have full system access.
+                </p>
+              </div>
+            </div>
+          )}
+
+          <DialogFooter>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => {
+                setShowRoleModal(false);
+                setSelectedMember(null);
+              }}
+            >
+              Cancel
+            </Button>
+            <Button
+              type="button"
+              onClick={() => {
+                if (selectedMember) {
+                  handleRoleChange(selectedMember.id, selectedRole);
+                }
+              }}
+              disabled={!selectedMember || selectedRole === selectedMember.role}
+            >
+              Update Role
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
     </div>
