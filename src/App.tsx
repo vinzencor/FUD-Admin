@@ -10,10 +10,21 @@ import { Login } from './pages/Login';
 import { Settings } from './pages/Settings';
 import { useAuthStore } from './store/authStore';
 
-function ProtectedRoute({ children }: { children: React.ReactNode }) {
+function ProtectedRoute({ 
+  children, 
+  allowedRoles = ['admin', 'super_admin'] 
+}: { 
+  children: React.ReactNode, 
+  allowedRoles?: string[] 
+}) {
   const user = useAuthStore((state) => state.user);
   
   if (!user) {
+    return <Navigate to="/login" replace />;
+  }
+  
+  // Check if user has one of the allowed roles
+  if (!allowedRoles.includes(user.role)) {
     return <Navigate to="/login" replace />;
   }
   
@@ -35,7 +46,7 @@ function App() {
         <Route
           path="/super-admin"
           element={
-            <ProtectedRoute>
+            <ProtectedRoute allowedRoles={['super_admin']}>
               <Layout />
             </ProtectedRoute>
           }
@@ -52,7 +63,7 @@ function App() {
         <Route
           path="/admin"
           element={
-            <ProtectedRoute>
+            <ProtectedRoute allowedRoles={['admin', 'super_admin']}>
               <Layout />
             </ProtectedRoute>
           }

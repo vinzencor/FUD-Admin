@@ -1,9 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { Plus, Pencil, Trash2 } from 'lucide-react';
 import Select from 'react-select';
-import { getAllUsers, updateUserRole, assignRegionsToAdmin } from '../../services/adminService';
+import { getAllUsers, updateUserRole, assignRegionsToAdmin, updateUserRoleByEmail } from '../../services/adminService';
 import { AdminUser } from '../../services/adminService';
 import { supabase } from '../../supabaseClient';
+import { toast } from 'react-toastify';
 
 interface Region {
   country: string;
@@ -136,6 +137,17 @@ export function ManageAdmins() {
       country: region.country,
     })) || []);
     setShowAddModal(true);
+  };
+
+  const handleMakeSuperAdmin = async (email: string) => {
+    try {
+      await updateUserRoleByEmail(email, 'super_admin');
+      // Refresh your user list or show success message
+      toast.success(`User ${email} has been promoted to Super Admin`);
+    } catch (error) {
+      console.error('Error making super admin:', error);
+      toast.error('Failed to update user role');
+    }
   };
 
   return (
@@ -290,3 +302,4 @@ export function ManageAdmins() {
     </div>
   );
 }
+
