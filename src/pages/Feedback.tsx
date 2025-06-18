@@ -1,195 +1,374 @@
-import React, { useState } from 'react';
-import { MessageSquare, User, Store, Search, Filter } from 'lucide-react';
-import { useAuthStore } from '../store/authStore';
+import React, { useState, useEffect } from 'react';
+import { MessageSquare, User, Search, Trash2, Star } from 'lucide-react';
+import { supabase } from '../supabaseClient';
 
-interface Feedback {
+interface Review {
   id: string;
-  type: 'customer' | 'farmer';
-  userName: string;
-  subject: string;
-  message: string;
-  status: 'new' | 'in_progress' | 'resolved';
-  date: string;
-  region: string;
+  user_id: string;
+  listing_id: string | null;
+  seller_id: string | null;
+  review_type: string;
+  rating: number;
+  comment: string | null;
+  created_at: string;
+  updated_at: string;
+  // Joined data
+  user?: {
+    id: string;
+    full_name: string;
+    email: string;
+  };
+  listing?: {
+    id: string;
+    name: string;
+    seller_name: string;
+  };
+  seller?: {
+    id: string;
+    full_name: string;
+    email: string;
+  };
 }
 
-const mockFeedback: Feedback[] = [
-  {
-    id: '1',
-    type: 'customer',
-    userName: 'John Doe',
-    subject: 'Delivery Issue',
-    message: 'My order was delayed by 2 days without any notification.',
-    status: 'new',
-    date: '2024-03-10',
-    region: 'California'
-  },
-  {
-    id: '2',
-    type: 'farmer',
-    userName: 'Green Valley Farm',
-    subject: 'Technical Problem',
-    message: 'Unable to update product prices in the system.',
-    status: 'in_progress',
-    date: '2024-03-09',
-    region: 'Texas'
-  },
-  {
-    id: '3',
-    type: 'customer',
-    userName: 'Sarah Smith',
-    subject: 'Product Quality',
-    message: 'Received damaged fruits in my last order.',
-    status: 'resolved',
-    date: '2024-03-08',
-    region: 'California'
-  },
-  {
-    id: '4',
-    type: 'farmer',
-    userName: 'Fresh Fields',
-    subject: 'Account Access',
-    message: 'Need help resetting my password.',
-    status: 'new',
-    date: '2024-03-11',
-    region: 'Florida'
-  }
-];
-
 export function Feedback() {
-  const user = useAuthStore((state) => state.user);
-  const [feedbacks, setFeedbacks] = useState<Feedback[]>(mockFeedback);
-  const [selectedStatus, setSelectedStatus] = useState<string>('all');
+  const [reviews, setReviews] = useState<Review[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [selectedType, setSelectedType] = useState<string>('all');
+  const [selectedRating, setSelectedRating] = useState<string>('all');
   const [searchTerm, setSearchTerm] = useState('');
 
-  const getStatusColor = (status: Feedback['status']) => {
-    switch (status) {
-      case 'new':
-        return 'bg-blue-100 text-blue-800';
-      case 'in_progress':
-        return 'bg-yellow-100 text-yellow-800';
-      case 'resolved':
-        return 'bg-green-100 text-green-800';
-      default:
-        return 'bg-gray-100 text-gray-800';
+  useEffect(() => {
+    fetchReviews();
+  }, []);
+
+  const fetchReviews = async () => {
+    try {
+      setLoading(true);
+      setError(null);
+
+      const { data, error: fetchError } = await supabase
+        .from('reviews')
+        .select(`
+          *,
+          user:users!user_id(
+            id,
+            full_name,
+            email
+          ),
+          listing:listings!listing_id(
+            id,
+            name,
+            seller_name
+          ),
+          seller:users!seller_id(
+            id,
+            full_name,
+            email
+          )
+        `)
+        .order('created_at', { ascending: false });
+
+      if (fetchError) {
+        console.error('Error fetching reviews:', fetchError);
+        setError('Failed to fetch reviews. Please try again.');
+        return;
+      }
+
+      setReviews(data || []);
+    } catch (err) {
+      console.error('Error fetching reviews:', err);
+      setError('Failed to fetch reviews. Please try again.');
+    } finally {
+      setLoading(false);
     }
   };
 
-  const handleStatusChange = (feedbackId: string, newStatus: Feedback['status']) => {
-    setFeedbacks(feedbacks.map(feedback =>
-      feedback.id === feedbackId ? { ...feedback, status: newStatus } : feedback
+  const handleDeleteReview = async (reviewId: string) => {
+    if (!window.confirm('Are you sure you want to delete this review? This action cannot be undone.')) {
+      return;
+    }
+
+    try {
+      const { error: deleteError } = await supabase
+        .from('reviews')
+        .delete()
+        .eq('id', reviewId);
+
+      if (deleteError) {
+        console.error('Error deleting review:', deleteError);
+        alert('Failed to delete review. Please try again.');
+        return;
+      }
+
+      // Remove from local state
+      setReviews(reviews.filter(review => review.id !== reviewId));
+      alert('Review deleted successfully.');
+    } catch (err) {
+      console.error('Error deleting review:', err);
+      alert('Failed to delete review. Please try again.');
+    }
+  };
+
+  const getRatingStars = (rating: number) => {
+    return Array.from({ length: 5 }, (_, index) => (
+      <Star
+        key={index}
+        className={`h-4 w-4 ${
+          index < rating ? 'text-yellow-400 fill-current' : 'text-gray-300'
+        }`}
+      />
     ));
   };
 
-  const filteredFeedback = feedbacks.filter(feedback => {
-    // Filter by region for admin users
-    if (user?.role === 'admin' && user.regions) {
-      if (!user.regions.some(r => r.name === feedback.region)) {
-        return false;
-      }
-    }
-
-    // Filter by status
-    if (selectedStatus !== 'all' && feedback.status !== selectedStatus) {
+  const filteredReviews = reviews.filter(review => {
+    // Filter by review type
+    if (selectedType !== 'all' && review.review_type !== selectedType) {
       return false;
     }
 
-    // Filter by type
-    if (selectedType !== 'all' && feedback.type !== selectedType) {
+    // Filter by rating
+    if (selectedRating !== 'all' && review.rating.toString() !== selectedRating) {
       return false;
     }
 
     // Search term
     const searchLower = searchTerm.toLowerCase();
+    const userName = review.user?.full_name || review.user?.email || 'Unknown User';
+    const listingName = review.listing?.name || '';
+    const sellerName = review.listing?.seller_name || review.seller?.full_name || '';
+    const comment = review.comment || '';
+
     return (
-      feedback.userName.toLowerCase().includes(searchLower) ||
-      feedback.subject.toLowerCase().includes(searchLower) ||
-      feedback.message.toLowerCase().includes(searchLower)
+      userName.toLowerCase().includes(searchLower) ||
+      listingName.toLowerCase().includes(searchLower) ||
+      sellerName.toLowerCase().includes(searchLower) ||
+      comment.toLowerCase().includes(searchLower) ||
+      review.review_type.toLowerCase().includes(searchLower)
     );
   });
 
+  if (loading) {
+    return (
+      <div className="space-y-4 sm:space-y-6 p-4 sm:p-6">
+        <div className="flex justify-center items-center h-64">
+          <div className="text-gray-500">Loading reviews...</div>
+        </div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="space-y-4 sm:space-y-6 p-4 sm:p-6">
+        <div className="flex justify-center items-center h-64">
+          <div className="text-red-500">{error}</div>
+        </div>
+      </div>
+    );
+  }
+
   return (
-    <div className="space-y-6">
-      <div className="flex justify-between items-center">
-        <h2 className="text-2xl font-semibold text-gray-900">Feedback Management</h2>
-        <div className="flex gap-2">
+    <div className="space-y-4 sm:space-y-6 p-4 sm:p-6">
+      {/* Header */}
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+        <h2 className="text-xl sm:text-2xl font-semibold text-gray-900">Reviews & Feedback</h2>
+        <button
+          onClick={fetchReviews}
+          className="px-4 py-2 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+        >
+          Refresh
+        </button>
+      </div>
+
+      {/* Filters */}
+      <div className="bg-white rounded-lg shadow-sm p-4">
+        <div className="flex flex-col md:flex-row gap-4">
+          <div className="flex-1 relative">
+            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
+            <input
+              type="text"
+              placeholder="Search reviews..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="pl-10 pr-4 py-2 w-full border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+            />
+          </div>
+          <select
+            value={selectedRating}
+            onChange={(e) => setSelectedRating(e.target.value)}
+            className="px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+          >
+            <option value="all">All Ratings</option>
+            <option value="5">5 Stars</option>
+            <option value="4">4 Stars</option>
+            <option value="3">3 Stars</option>
+            <option value="2">2 Stars</option>
+            <option value="1">1 Star</option>
+          </select>
           <select
             value={selectedType}
             onChange={(e) => setSelectedType(e.target.value)}
-            className="border border-gray-300 rounded-lg px-3 py-2"
+            className="px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
           >
             <option value="all">All Types</option>
-            <option value="customer">Customer</option>
-            <option value="farmer">Farmer</option>
-          </select>
-          <select
-            value={selectedStatus}
-            onChange={(e) => setSelectedStatus(e.target.value)}
-            className="border border-gray-300 rounded-lg px-3 py-2"
-          >
-            <option value="all">All Status</option>
-            <option value="new">New</option>
-            <option value="in_progress">In Progress</option>
-            <option value="resolved">Resolved</option>
+            <option value="listing">Listing Reviews</option>
+            <option value="seller">Seller Reviews</option>
+            <option value="general">General Reviews</option>
           </select>
         </div>
       </div>
 
-      <div className="relative">
-        <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-5 w-5" />
-        <input
-          type="text"
-          placeholder="Search by name, subject, or message..."
-          value={searchTerm}
-          onChange={(e) => setSearchTerm(e.target.value)}
-          className="pl-10 pr-4 py-2 w-full border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
-        />
-      </div>
-
-      <div className="grid gap-4">
-        {filteredFeedback.map((feedback) => (
-          <div key={feedback.id} className="bg-white rounded-lg shadow-md p-6">
-            <div className="flex items-start justify-between">
-              <div className="flex items-start space-x-4">
-                {feedback.type === 'customer' ? (
-                  <User className="h-10 w-10 text-gray-400 bg-gray-100 rounded-full p-2" />
-                ) : (
-                  <Store className="h-10 w-10 text-gray-400 bg-gray-100 rounded-full p-2" />
-                )}
-                <div>
-                  <div className="flex items-center space-x-2">
-                    <h3 className="text-lg font-medium text-gray-900">{feedback.userName}</h3>
-                    <span className="text-sm text-gray-500">({feedback.type})</span>
+      {/* Reviews List */}
+      {filteredReviews.length === 0 ? (
+        <div className="bg-white rounded-lg shadow-sm p-8 text-center">
+          <MessageSquare className="h-12 w-12 text-gray-400 mx-auto mb-4" />
+          <h3 className="text-lg font-medium text-gray-900 mb-2">No reviews found</h3>
+          <p className="text-gray-500">No reviews match your current filters.</p>
+        </div>
+      ) : (
+        <div className="space-y-4">
+          {/* Mobile Card View */}
+          <div className="block lg:hidden space-y-4">
+            {filteredReviews.map((review) => (
+              <div key={review.id} className="bg-white rounded-lg shadow-sm border p-4">
+                <div className="flex justify-between items-start mb-3">
+                  <div className="flex-1">
+                    <div className="flex items-center gap-2 mb-1">
+                      <User className="h-4 w-4 text-gray-400" />
+                      <span className="text-sm font-medium text-gray-900">
+                        {review.user?.full_name || review.user?.email || 'Unknown User'}
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-2 mb-2">
+                      {getRatingStars(review.rating)}
+                      <span className="text-sm text-gray-500">({review.rating}/5)</span>
+                    </div>
                   </div>
-                  <p className="text-sm text-gray-500">{feedback.date}</p>
-                  {user?.role === 'super_admin' && (
-                    <p className="text-sm text-gray-500">Region: {feedback.region}</p>
+                  <button
+                    onClick={() => handleDeleteReview(review.id)}
+                    className="p-2 text-red-600 hover:bg-red-50 rounded-lg"
+                    title="Delete review"
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </button>
+                </div>
+
+                <div className="space-y-2 text-sm">
+                  <div className="flex justify-between">
+                    <span className="text-gray-500">Type:</span>
+                    <span className="text-gray-900 capitalize">{review.review_type}</span>
+                  </div>
+                  {review.listing && (
+                    <div className="flex justify-between">
+                      <span className="text-gray-500">Listing:</span>
+                      <span className="text-gray-900">{review.listing.name}</span>
+                    </div>
+                  )}
+                  {review.listing?.seller_name && (
+                    <div className="flex justify-between">
+                      <span className="text-gray-500">Seller:</span>
+                      <span className="text-gray-900">{review.listing.seller_name}</span>
+                    </div>
+                  )}
+                  <div className="flex justify-between">
+                    <span className="text-gray-500">Date:</span>
+                    <span className="text-gray-900">{new Date(review.created_at).toLocaleDateString()}</span>
+                  </div>
+                  {review.comment && (
+                    <div className="mt-3 p-3 bg-gray-50 rounded-lg">
+                      <p className="text-gray-700">{review.comment}</p>
+                    </div>
                   )}
                 </div>
               </div>
-              <select
-                value={feedback.status}
-                onChange={(e) => handleStatusChange(feedback.id, e.target.value as Feedback['status'])}
-                className={`px-3 py-1 rounded-full text-sm ${getStatusColor(feedback.status)}`}
-              >
-                <option value="new">New</option>
-                <option value="in_progress">In Progress</option>
-                <option value="resolved">Resolved</option>
-              </select>
-            </div>
-            <div className="mt-4">
-              <h4 className="text-md font-medium text-gray-900">{feedback.subject}</h4>
-              <p className="mt-1 text-gray-600">{feedback.message}</p>
-            </div>
-            <div className="mt-4 flex justify-end">
-              <button className="px-4 py-2 text-sm font-medium text-primary-600 hover:text-primary-700">
-                Add Response
-              </button>
+            ))}
+          </div>
+
+          {/* Desktop Table View */}
+          <div className="hidden lg:block bg-white rounded-lg shadow-sm border overflow-hidden">
+            <div className="overflow-x-auto">
+              <table className="min-w-full divide-y divide-gray-200">
+                <thead className="bg-gray-50">
+                  <tr>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      User
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Rating
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Type
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Subject
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Comment
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Date
+                    </th>
+                    <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Actions
+                    </th>
+                  </tr>
+                </thead>
+                <tbody className="bg-white divide-y divide-gray-200">
+                  {filteredReviews.map((review) => (
+                    <tr key={review.id} className="hover:bg-gray-50">
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <div className="flex items-center">
+                          <User className="h-8 w-8 text-gray-400 bg-gray-100 rounded-full p-2 mr-3" />
+                          <div>
+                            <div className="text-sm font-medium text-gray-900">
+                              {review.user?.full_name || 'Unknown User'}
+                            </div>
+                            <div className="text-sm text-gray-500">
+                              {review.user?.email}
+                            </div>
+                          </div>
+                        </div>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <div className="flex items-center gap-1">
+                          {getRatingStars(review.rating)}
+                          <span className="ml-1 text-sm text-gray-500">({review.rating})</span>
+                        </div>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <span className="px-2 py-1 text-xs font-medium bg-blue-100 text-blue-800 rounded-full capitalize">
+                          {review.review_type}
+                        </span>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                        {review.listing?.name || review.seller?.full_name || 'General Review'}
+                      </td>
+                      <td className="px-6 py-4 text-sm text-gray-500 max-w-xs">
+                        <div className="truncate">
+                          {review.comment || 'No comment'}
+                        </div>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                        {new Date(review.created_at).toLocaleDateString()}
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                        <button
+                          onClick={() => handleDeleteReview(review.id)}
+                          className="text-red-600 hover:text-red-900 p-1 rounded"
+                          title="Delete review"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
             </div>
           </div>
-        ))}
-      </div>
+        </div>
+      )}
     </div>
   );
 }
