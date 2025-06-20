@@ -10,38 +10,52 @@ import { Login } from './pages/Login';
 import { Settings } from './pages/Settings';
 import { useAuthStore } from './store/authStore';
 
-function ProtectedRoute({ 
-  children, 
-  allowedRoles = ['admin', 'super_admin'] 
-}: { 
-  children: React.ReactNode, 
-  allowedRoles?: string[] 
+function ProtectedRoute({
+  children,
+  allowedRoles = ['admin', 'super_admin']
+}: {
+  children: React.ReactNode,
+  allowedRoles?: string[]
 }) {
   const user = useAuthStore((state) => state.user);
-  
+
+  // If no user is found, redirect to login
   if (!user) {
     return <Navigate to="/login" replace />;
   }
-  
+
   // Check if user has one of the allowed roles
   if (!allowedRoles.includes(user.role)) {
     return <Navigate to="/login" replace />;
   }
-  
+
   return <>{children}</>;
 }
 
 function App() {
   const user = useAuthStore((state) => state.user);
-  const basePath = user?.role === 'super_admin' ? '/super-admin' : '/admin';
 
   return (
     <Router>
       <Routes>
         <Route path="/login" element={<Login />} />
-        
-        <Route path="/" element={<Navigate to={user ? `${basePath}/dashboard` : '/login'} replace />} />
-        
+
+        <Route
+          path="/"
+          element={
+            <Navigate
+              to={
+                user
+                  ? user.role === 'super_admin'
+                    ? '/super-admin/dashboard'
+                    : '/admin/dashboard'
+                  : '/login'
+              }
+              replace
+            />
+          }
+        />
+
         {/* Super Admin Routes */}
         <Route
           path="/super-admin"
@@ -51,6 +65,7 @@ function App() {
             </ProtectedRoute>
           }
         >
+          <Route index element={<Navigate to="/super-admin/dashboard" replace />} />
           <Route path="dashboard" element={<Dashboard />} />
           <Route path="members" element={<Members />} />
           <Route path="pma-members" element={<PMAMembers />} />
@@ -68,6 +83,7 @@ function App() {
             </ProtectedRoute>
           }
         >
+          <Route index element={<Navigate to="/admin/dashboard" replace />} />
           <Route path="dashboard" element={<Dashboard />} />
           <Route path="members" element={<Members />} />
           <Route path="pma-members" element={<PMAMembers />} />
@@ -75,6 +91,23 @@ function App() {
           <Route path="feedback" element={<Feedback />} />
           <Route path="settings" element={<Settings />} />
         </Route>
+
+        {/* Catch all route - redirect to login if no user, otherwise to appropriate dashboard */}
+        <Route
+          path="*"
+          element={
+            <Navigate
+              to={
+                user
+                  ? user.role === 'super_admin'
+                    ? '/super-admin/dashboard'
+                    : '/admin/dashboard'
+                  : '/login'
+              }
+              replace
+            />
+          }
+        />
       </Routes>
     </Router>
   );

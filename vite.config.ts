@@ -16,6 +16,14 @@ export default defineConfig({
       usePolling: true,
     },
   },
+  // Configure for client-side routing
+  build: {
+    rollupOptions: {
+      output: {
+        manualChunks: undefined,
+      },
+    },
+  },
 });
 
 
