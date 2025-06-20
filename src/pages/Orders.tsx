@@ -212,27 +212,24 @@ export function Orders() {
   const totalPages = Math.ceil(totalOrders / pageSize);
 
   return (
-    <div className="space-y-4 sm:space-y-6 p-4 sm:p-6">
-      {/* Header Section - Responsive */}
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-        <h2 className="text-xl sm:text-2xl font-semibold text-gray-900">Orders</h2>
-        <div className="flex items-center gap-2 w-full sm:w-auto">
-          <button
+    <div className="space-y-6">
+      <div className="flex justify-between items-center">
+        <h2 className="text-lg font-semibold text-gray-900">Orders</h2>
+        <div className="flex items-center gap-2">
+          <button 
             onClick={() => fetchOrders()}
-            className="flex items-center gap-2 px-3 py-2 sm:p-2 rounded-lg hover:bg-gray-100 text-sm sm:text-base"
+            className="p-2 rounded-lg hover:bg-gray-100"
             title="Refresh orders"
           >
-            <RefreshCw className="h-4 w-4 sm:h-5 sm:w-5 text-gray-500" />
-            <span className="sm:hidden">Refresh</span>
+            <RefreshCw className="h-5 w-5 text-gray-500" />
           </button>
-          <button
+          <button 
             onClick={handleExport}
-            className="flex items-center gap-2 px-3 py-2 sm:p-2 rounded-lg hover:bg-gray-100 text-sm sm:text-base"
+            className="p-2 rounded-lg hover:bg-gray-100"
             title="Export to CSV"
             disabled={orders.length === 0}
           >
-            <Download className="h-4 w-4 sm:h-5 sm:w-5 text-gray-500" />
-            <span className="sm:hidden">Export</span>
+            <Download className="h-5 w-5 text-gray-500" />
           </button>
         </div>
       </div>
@@ -299,25 +296,22 @@ export function Orders() {
           
           {/* Pagination */}
           {totalPages > 1 && (
-            <div className="flex flex-col sm:flex-row justify-between items-center mt-4 gap-4">
-              <div className="text-sm text-gray-500 order-2 sm:order-1">
+            <div className="flex justify-between items-center mt-4">
+              <div className="text-sm text-gray-500">
                 Showing {Math.min((page - 1) * pageSize + 1, totalOrders)} to {Math.min(page * pageSize, totalOrders)} of {totalOrders} orders
               </div>
-              <div className="flex gap-2 order-1 sm:order-2">
+              <div className="flex gap-2">
                 <button
                   onClick={() => setPage(p => Math.max(1, p - 1))}
                   disabled={page === 1}
-                  className={`px-3 py-2 text-sm rounded border ${page === 1 ? 'bg-gray-100 text-gray-400 cursor-not-allowed' : 'bg-white text-gray-700 hover:bg-gray-50'}`}
+                  className={`px-3 py-1 rounded border ${page === 1 ? 'bg-gray-100 text-gray-400 cursor-not-allowed' : 'bg-white text-gray-700 hover:bg-gray-50'}`}
                 >
                   Previous
                 </button>
-                <span className="px-3 py-2 text-sm text-gray-500">
-                  Page {page} of {totalPages}
-                </span>
                 <button
                   onClick={() => setPage(p => Math.min(totalPages, p + 1))}
                   disabled={page === totalPages}
-                  className={`px-3 py-2 text-sm rounded border ${page === totalPages ? 'bg-gray-100 text-gray-400 cursor-not-allowed' : 'bg-white text-gray-700 hover:bg-gray-50'}`}
+                  className={`px-3 py-1 rounded border ${page === totalPages ? 'bg-gray-100 text-gray-400 cursor-not-allowed' : 'bg-white text-gray-700 hover:bg-gray-50'}`}
                 >
                   Next
                 </button>
