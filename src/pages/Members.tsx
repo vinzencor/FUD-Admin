@@ -55,7 +55,7 @@ export function Members() {
         // First, get users from the database
         const { data: usersData, error: usersError } = await supabase
           .from('users')
-          .select('id, full_name, email, mobile_phone, country, state, city, created_at');
+          .select('id, full_name, email, mobile_phone, country, state, city, created_at, default_mode');
 
         if (usersError) {
           console.error('Failed to fetch members:', usersError);
@@ -81,6 +81,19 @@ export function Members() {
           const authUser = authUsers.find(au => au.id === row.id);
           const userRole = authUser?.app_metadata?.role || 'user';
 
+          // Determine defaultMode based on database field or role
+          let defaultMode: 'buyer' | 'seller' | 'both';
+          if (row.default_mode && ['buyer', 'seller', 'both'].includes(row.default_mode)) {
+            // Use the default_mode from database if it exists and is valid
+            defaultMode = row.default_mode as 'buyer' | 'seller' | 'both';
+          } else if (userRole === 'super_admin' || userRole === 'admin') {
+            // Admins can be both buyers and sellers
+            defaultMode = 'both';
+          } else {
+            // For regular users without a specified mode, default to 'buyer'
+            defaultMode = 'buyer';
+          }
+
           return {
             id: row.id,
             name: row.full_name || 'Unknown',
@@ -90,7 +103,7 @@ export function Members() {
             location: `${row.city || ''}, ${row.state || ''}`,
             joinDate: row.created_at,
             lastActive: row.created_at,
-            defaultMode: 'buyer' as 'buyer', // or set based on your logic/data
+            defaultMode: defaultMode,
             role: userRole as 'user' | 'admin' | 'super_admin'
           };
         });
