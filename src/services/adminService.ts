@@ -78,3 +78,35 @@ export async function assignRegionsToAdmin(userId: string, regions: { country: s
     throw error
   }
 }
+
+/**
+ * Updates a user's role in Supabase
+ * @param email The email of the user to update
+ * @param role The new role to assign ('super_admin', 'admin', etc.)
+ */
+export async function updateUserRoleByEmail(email: string, role: string) {
+  try {
+    // First, get the user ID from their email
+    const { data: users, error: fetchError } = await supabaseAdmin.auth.admin.listUsers();
+    
+    if (fetchError) throw fetchError;
+    
+    const user = users.users.find(u => u.email === email);
+    
+    if (!user) {
+      throw new Error(`User with email ${email} not found`);
+    }
+    
+    // Then update the user's role
+    const { data, error } = await supabaseAdmin.auth.admin.updateUserById(
+      user.id,
+      { app_metadata: { role } }
+    );
+    
+    if (error) throw error;
+    return data;
+  } catch (error) {
+    console.error('Error updating user role:', error);
+    throw error;
+  }
+}

@@ -36,14 +36,45 @@ export function Login() {
         return;
       }
 
-      // Get user role from app_metadata or use selected role
-      const userRole = data.user.app_metadata?.role || role;
-      
+      // Get user role from app_metadata
+      const userRole = data.user.app_metadata?.role;
+
+      // Check if user has admin or super_admin role
+      if (!userRole || (userRole !== 'admin' && userRole !== 'super_admin')) {
+        setError('Access denied. You do not have permission to access the admin panel.');
+        await supabase.auth.signOut(); // Sign them out immediately
+        return;
+      }
+
+      // Try to get user's full name from the users table
+      let userName = data.user.user_metadata?.name || '';
+
+      if (!userName) {
+        try {
+          const { data: userData, error: userError } = await supabase
+            .from('users')
+            .select('full_name')
+            .eq('id', data.user.id)
+            .single();
+
+          if (!userError && userData) {
+            userName = userData.full_name || '';
+          }
+        } catch (err) {
+          console.log('Could not fetch user name from database:', err);
+        }
+      }
+
+      // If still no name, use email prefix
+      if (!userName) {
+        userName = data.user.email?.split('@')[0] || 'Admin';
+      }
+
       // Login the user with the auth store
       login({
         id: data.user.id,
         email: data.user.email || '',
-        name: data.user.user_metadata?.name || '', // Provide name from user_metadata or fallback
+        name: userName,
         role: userRole as UserRole,
         regions: data.user.user_metadata?.regions || []
       });
@@ -134,3 +165,4 @@ export function Login() {
     </div>
   );
 }
+
