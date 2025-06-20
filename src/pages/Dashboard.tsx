@@ -31,6 +31,7 @@ export function Dashboard() {
   const [recentOrders, setRecentOrders] = useState<Order[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [refreshingCache, setRefreshingCache] = useState(false);
   
   // Get region name safely
   const regionName = user?.regions && user.regions.length > 0 
@@ -47,11 +48,11 @@ export function Dashboard() {
     try {
       setLoading(true);
       setError(null);
-      
+
       // Fetch stats based on user role
       const statsData = await fetchStats();
       setStats(statsData);
-      
+
       // Fetch recent orders
       const orders = await fetchRecentOrders();
       setRecentOrders(orders);
@@ -63,6 +64,27 @@ export function Dashboard() {
     }
   };
 
+  const refreshSchemaCache = async () => {
+    try {
+      setRefreshingCache(true);
+      const { data, error } = await supabase.rpc('refresh_schema_cache');
+
+      if (error) throw error;
+
+      if (data?.success) {
+        // Refresh dashboard data after cache refresh
+        await fetchDashboardData();
+      } else {
+        throw new Error(data?.error || 'Failed to refresh schema cache');
+      }
+    } catch (err) {
+      console.error('Error refreshing schema cache:', err);
+      setError('Failed to refresh schema cache');
+    } finally {
+      setRefreshingCache(false);
+    }
+  };
+
   const fetchStats = async (): Promise<DashboardStats> => {
     try {
       // For super admin, get global stats
@@ -71,19 +93,18 @@ export function Dashboard() {
         const { count: membersCount } = await supabase
           .from('users')
           .select('*', { count: 'exact', head: true });
-        
-        // Count PMA members
+
+        // Count PMA members (users who have seller profiles)
         const { count: pmaCount } = await supabase
-          .from('users')
-          .select('*', { count: 'exact', head: true })
-          .eq('is_pma', true);
-        
+          .from('seller_profiles')
+          .select('*', { count: 'exact', head: true });
+
         // Count active orders (interests)
         const { count: ordersCount } = await supabase
           .from('interests')
           .select('*', { count: 'exact', head: true })
           .in('status', ['pending', 'in_discussion']);
-        
+
         return {
           members: membersCount || 0,
           pmaMembers: pmaCount || 0,
@@ -99,9 +120,9 @@ export function Dashboard() {
           .from('users')
           .select('*', { count: 'exact', head: true });
 
-        // Count regional PMA members (assuming is_pma field exists)
+        // Count regional PMA members (users who have seller profiles)
         const { count: pmaCount } = await supabase
-          .from('users')
+          .from('seller_profiles')
           .select('*', { count: 'exact', head: true });
 
         // Count regional active orders (interests)
@@ -112,14 +133,14 @@ export function Dashboard() {
 
         return {
           members: membersCount || 0,
-          pmaMembers: Math.floor((pmaCount || 0) * 0.3), // Assume 30% are PMA members
+          pmaMembers: pmaCount || 0,
           activeOrders: ordersCount || 0
         };
       }
     } catch (error) {
       console.error('Error fetching stats:', error);
       // Return fallback data if there's an error
-      return isSuperAdmin 
+      return isSuperAdmin
         ? { members: 8976, pmaMembers: 1245, activeOrders: 367 }
         : { members: 1856, pmaMembers: 234, activeOrders: 86 };
     }
@@ -127,7 +148,24 @@ export function Dashboard() {
 
   const fetchRecentOrders = async (): Promise<Order[]> => {
     try {
-      const { data, error } = await supabase
+      // Use the database function for better performance and error handling
+      const { data, error } = await supabase.rpc('get_dashboard_stats');
+
+      if (error) throw error;
+
+      if (data && data.recent_interests && Array.isArray(data.recent_interests)) {
+        return data.recent_interests.map((interest: any) => ({
+          id: interest.id,
+          buyer: interest.buyer_name || 'Unknown Customer',
+          seller: interest.seller_name || 'Unknown Seller',
+          product: interest.product_name || 'Unknown Product',
+          status: interest.status,
+          created_at: interest.created_at
+        }));
+      }
+
+      // Fallback to direct query if function fails
+      const { data: fallbackData, error: fallbackError } = await supabase
         .from('interests')
         .select(`
           *,
@@ -147,10 +185,10 @@ export function Dashboard() {
         .order('created_at', { ascending: false })
         .limit(5);
 
-      if (error) throw error;
+      if (fallbackError) throw fallbackError;
 
-      if (data && data.length > 0) {
-        return data.map((interest: any) => ({
+      if (fallbackData && fallbackData.length > 0) {
+        return fallbackData.map((interest: any) => ({
           id: interest.id,
           buyer: interest.buyer?.full_name || interest.buyer?.email || 'Unknown Customer',
           seller: interest.listings?.seller_name || 'Unknown Seller',
@@ -217,12 +255,24 @@ export function Dashboard() {
         <h2 className="text-2xl font-semibold text-gray-900">
           {isSuperAdmin ? 'Global Overview' : `${regionName} Overview`}
         </h2>
-        <button 
-          onClick={fetchDashboardData}
-          className="text-sm text-primary-600 hover:text-primary-800 flex items-center"
-        >
-          Refresh Data
-        </button>
+        <div className="flex gap-2">
+          <button
+            onClick={fetchDashboardData}
+            disabled={loading}
+            className="text-sm text-primary-600 hover:text-primary-800 flex items-center"
+          >
+            Refresh Data
+          </button>
+          {(error?.includes('schema') || error?.includes('cache')) && (
+            <button
+              onClick={refreshSchemaCache}
+              disabled={refreshingCache}
+              className="text-sm text-orange-600 hover:text-orange-800 flex items-center px-2 py-1 border border-orange-300 rounded"
+            >
+              {refreshingCache ? 'Refreshing...' : 'Refresh Schema'}
+            </button>
+          )}
+        </div>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">

@@ -79,7 +79,20 @@ export function OrderTable({ orders, onStatusChange }: OrderTableProps) {
           {orders.map((order) => (
             <tr key={order.id} className="hover:bg-gray-50">
               <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
-                {order.id}
+                <div className="flex items-center space-x-2">
+                  <span className="font-mono text-xs">
+                    {order.id.startsWith('interest_') ? order.id.replace('interest_', '') : order.id}
+                  </span>
+                  {order.id.startsWith('interest_') ? (
+                    <span className="px-2 py-1 text-xs bg-blue-100 text-blue-800 rounded-full">
+                      Interest
+                    </span>
+                  ) : (
+                    <span className="px-2 py-1 text-xs bg-green-100 text-green-800 rounded-full">
+                      Order
+                    </span>
+                  )}
+                </div>
               </td>
               <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                 {order.customer}
@@ -127,7 +140,13 @@ export function OrderTable({ orders, onStatusChange }: OrderTableProps) {
                 </div>
               </td>
               <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                {order.date}
+                {new Date(order.date).toLocaleDateString('en-US', {
+                  year: 'numeric',
+                  month: 'short',
+                  day: 'numeric',
+                  hour: '2-digit',
+                  minute: '2-digit'
+                })}
               </td>
             </tr>
           ))}

@@ -8,6 +8,7 @@ import {
   LogOut,
   Settings,
   Crown,
+  Heart,
 } from 'lucide-react';
 import { cn } from '../../lib/utils';
 import { useAuthStore } from '../../store/authStore';
@@ -24,6 +25,7 @@ export function Sidebar() {
     { name: 'Members', to: `${basePath}/members`, icon: Users },
     { name: 'PMA Members', to: `${basePath}/pma-members`, icon: Crown },
     { name: 'Orders', to: `${basePath}/orders`, icon: ShoppingBasket },
+    { name: 'Interests', to: `${basePath}/interests`, icon: Heart },
     { name: 'Feedback', to: `${basePath}/feedback`, icon: MessageSquare },
     { name: 'Settings', to: `${basePath}/settings`, icon: Settings },
   ];

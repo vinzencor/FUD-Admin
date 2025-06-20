@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Search, MoreVertical, CheckCircle, XCircle, AlertTriangle, Edit, Trash2, Crown } from 'lucide-react';
+import { Search, MoreVertical, CheckCircle, XCircle, AlertTriangle, Edit, Trash2, Crown, Store } from 'lucide-react';
 import { format, addMonths } from 'date-fns';
 import { Badge } from '../components/ui/badge';
 import { Button } from '../components/ui/button';
@@ -24,6 +24,11 @@ interface Member {
   lastActive: string;
   defaultMode: 'buyer' | 'seller' | 'both';
   role?: 'user' | 'admin' | 'super_admin';
+  isSeller: boolean;
+  sellerInfo?: {
+    storeName?: string;
+    isApproved?: boolean;
+  };
 }
 
 
@@ -31,6 +36,7 @@ export function Members() {
   const navigate = useNavigate();
   const user = useAuthStore((state) => state.user);
   const [status, setStatus] = useState<'all' | 'active' | 'suspended'>('all');
+  const [userTypeFilter, setUserTypeFilter] = useState<'all' | 'buyer' | 'seller' | 'both'>('all');
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedMember, setSelectedMember] = useState<Member | null>(null);
   const [showUpgradeModal, setShowUpgradeModal] = useState(false);
@@ -63,6 +69,15 @@ export function Members() {
           return;
         }
 
+        // Get seller profiles to identify sellers
+        const { data: sellerProfiles, error: sellerError } = await supabase
+          .from('seller_profiles')
+          .select('user_id, store_name, is_approved');
+
+        if (sellerError) {
+          console.error('Failed to fetch seller profiles:', sellerError);
+        }
+
         // Then, get auth users to fetch roles (only super admin can do this)
         let authUsers: any[] = [];
         if (user?.role === 'super_admin') {
@@ -81,13 +96,20 @@ export function Members() {
           const authUser = authUsers.find(au => au.id === row.id);
           const userRole = authUser?.app_metadata?.role || 'user';
 
-          // Determine defaultMode based on database field or role
+          // Check if user is a seller
+          const sellerProfile = sellerProfiles?.find(sp => sp.user_id === row.id);
+          const isSeller = !!sellerProfile;
+
+          // Determine defaultMode based on database field, seller status, or role
           let defaultMode: 'buyer' | 'seller' | 'both';
           if (row.default_mode && ['buyer', 'seller', 'both'].includes(row.default_mode)) {
             // Use the default_mode from database if it exists and is valid
             defaultMode = row.default_mode as 'buyer' | 'seller' | 'both';
           } else if (userRole === 'super_admin' || userRole === 'admin') {
             // Admins can be both buyers and sellers
+            defaultMode = 'both';
+          } else if (isSeller) {
+            // If user has a seller profile, they can be both buyer and seller
             defaultMode = 'both';
           } else {
             // For regular users without a specified mode, default to 'buyer'
@@ -104,7 +126,12 @@ export function Members() {
             joinDate: row.created_at,
             lastActive: row.created_at,
             defaultMode: defaultMode,
-            role: userRole as 'user' | 'admin' | 'super_admin'
+            role: userRole as 'user' | 'admin' | 'super_admin',
+            isSeller: isSeller,
+            sellerInfo: sellerProfile ? {
+              storeName: sellerProfile.store_name,
+              isApproved: sellerProfile.is_approved
+            } : undefined
           };
         });
 
@@ -165,13 +192,20 @@ export function Members() {
 
   const filteredMembers = members.filter(member => {
     const matchesStatus = status === 'all' || member.status === status;
+
+    const matchesUserType = userTypeFilter === 'all' ||
+      (userTypeFilter === 'buyer' && !member.isSeller && member.defaultMode === 'buyer') ||
+      (userTypeFilter === 'seller' && member.isSeller && member.defaultMode !== 'buyer') ||
+      (userTypeFilter === 'both' && member.isSeller && member.defaultMode === 'both');
+
     const matchesSearch =
       member.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
       member.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
       member.phone.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      member.location.toLowerCase().includes(searchTerm.toLowerCase());
+      member.location.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (member.sellerInfo?.storeName && member.sellerInfo.storeName.toLowerCase().includes(searchTerm.toLowerCase()));
 
-    return matchesStatus && matchesSearch;
+    return matchesStatus && matchesUserType && matchesSearch;
   });
 
   const handleDeleteMember = async (memberId: string) => {
@@ -261,11 +295,56 @@ export function Members() {
     }
   };
 
+  const getUserTypeColor = (member: Member) => {
+    if (member.isSeller && member.defaultMode === 'both') {
+      return 'bg-purple-100 text-purple-800';
+    } else if (member.isSeller || member.defaultMode === 'seller') {
+      return 'bg-green-100 text-green-800';
+    } else {
+      return 'bg-blue-100 text-blue-800';
+    }
+  };
+
+  const getUserTypeLabel = (member: Member) => {
+    if (member.isSeller && member.defaultMode === 'both') {
+      return 'Buyer & Seller';
+    } else if (member.isSeller || member.defaultMode === 'seller') {
+      return 'Seller';
+    } else {
+      return 'Buyer';
+    }
+  };
+
+  const getSellerStatus = (member: Member) => {
+    if (!member.isSeller) return null;
+
+    if (member.sellerInfo?.isApproved) {
+      return { label: 'Approved', color: 'bg-green-100 text-green-800' };
+    } else {
+      return { label: 'Pending', color: 'bg-yellow-100 text-yellow-800' };
+    }
+  };
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary-600"></div>
+        <span className="ml-3 text-gray-600">Loading members...</span>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row justify-between items-center gap-4">
         <div>
           <h2 className="text-2xl font-semibold text-gray-900">Members</h2>
+          <div className="flex flex-wrap gap-4 mt-2 text-sm text-gray-600">
+            <span>Total: {members.length}</span>
+            <span>Buyers: {members.filter(m => !m.isSeller && m.defaultMode === 'buyer').length}</span>
+            <span>Sellers: {members.filter(m => m.isSeller).length}</span>
+            <span>Both: {members.filter(m => m.isSeller && m.defaultMode === 'both').length}</span>
+          </div>
           {user?.role === 'super_admin' && (
             <p className="text-sm text-gray-600 mt-1">
               <Crown className="inline h-4 w-4 mr-1" />
@@ -294,6 +373,16 @@ export function Members() {
               />
             </div>
             <select
+              value={userTypeFilter}
+              onChange={(e) => setUserTypeFilter(e.target.value as typeof userTypeFilter)}
+              className="px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+            >
+              <option value="all">All User Types</option>
+              <option value="buyer">Buyers Only</option>
+              <option value="seller">Sellers Only</option>
+              <option value="both">Buyer & Seller</option>
+            </select>
+            <select
               value={status}
               onChange={(e) => setStatus(e.target.value as typeof status)}
               className="px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent"
@@ -317,6 +406,9 @@ export function Members() {
                 </th>
                 <th className="px-6 py-3 text-left">
                   <div className="text-xs font-medium text-gray-500 uppercase tracking-wider">Location</div>
+                </th>
+                <th className="px-6 py-3 text-left">
+                  <div className="text-xs font-medium text-gray-500 uppercase tracking-wider">User Type</div>
                 </th>
                 <th className="px-6 py-3 text-left">
                   <div className="text-xs font-medium text-gray-500 uppercase tracking-wider">Role</div>
@@ -351,6 +443,25 @@ export function Members() {
                   </td>
                   <td className="px-6 py-4">
                     <div className="text-sm text-gray-900">{member.location}</div>
+                  </td>
+                  <td className="px-6 py-4">
+                    <div className="flex flex-col gap-1">
+                      <span className={`px-2 py-1 text-xs font-medium rounded-full flex items-center gap-1 ${getUserTypeColor(member)}`}>
+                        {member.isSeller && <Store className="h-3 w-3" />}
+                        {getUserTypeLabel(member)}
+                      </span>
+                      {member.isSeller && member.sellerInfo?.storeName && (
+                        <div className="text-xs text-gray-500 flex items-center gap-1">
+                          <Store className="h-3 w-3" />
+                          {member.sellerInfo.storeName}
+                        </div>
+                      )}
+                      {getSellerStatus(member) && (
+                        <span className={`px-2 py-1 text-xs font-medium rounded-full ${getSellerStatus(member)?.color}`}>
+                          {getSellerStatus(member)?.label}
+                        </span>
+                      )}
+                    </div>
                   </td>
                   <td className="px-6 py-4">
                     <span className={`px-2 py-1 text-xs font-medium rounded-full ${getRoleColor(member.role ?? '')}`}>
