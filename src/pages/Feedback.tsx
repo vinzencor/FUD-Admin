@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { MessageSquare, User, Store, Search, Filter, Loader2, RefreshCw, Download, Star } from 'lucide-react';
+import { MessageSquare, User, Store, Search, Filter, Loader2, RefreshCw, Download, Star, Trash2, AlertTriangle } from 'lucide-react';
 import { useAuthStore } from '../store/authStore';
 import { supabase } from '../supabaseClient';
 
@@ -82,6 +82,18 @@ export function Feedback() {
     feedbackSubject: ''
   });
   const [responseText, setResponseText] = useState('');
+  const [deleteModal, setDeleteModal] = useState<{
+    isOpen: boolean;
+    feedbackId: string;
+    feedbackSubject: string;
+    feedbackType: string;
+  }>({
+    isOpen: false,
+    feedbackId: '',
+    feedbackSubject: '',
+    feedbackType: ''
+  });
+  const [isDeleting, setIsDeleting] = useState(false);
 
   // Fetch feedback data from database
   const fetchFeedback = async () => {
@@ -302,6 +314,64 @@ export function Feedback() {
     if (success) {
       setResponseModal({ isOpen: false, feedbackId: '', feedbackSubject: '' });
       setResponseText('');
+    }
+  };
+
+  // Delete feedback function
+  const deleteFeedback = async (feedbackId: string, feedbackType: string) => {
+    try {
+      setIsDeleting(true);
+
+      if (feedbackType === 'review') {
+        // Delete from reviews table
+        const { error } = await supabase
+          .from('reviews')
+          .delete()
+          .eq('id', feedbackId);
+
+        if (error) {
+          console.error('Error deleting review:', error);
+          return false;
+        }
+      } else {
+        // Delete from feedback table
+        const { error } = await supabase
+          .from('feedback')
+          .delete()
+          .eq('id', feedbackId);
+
+        if (error) {
+          console.error('Error deleting feedback:', error);
+          return false;
+        }
+      }
+
+      // Remove from local state immediately for better UX
+      setFeedbacks(prev => prev.filter(f => f.id !== feedbackId));
+      return true;
+    } catch (err) {
+      console.error('Error deleting feedback:', err);
+      return false;
+    } finally {
+      setIsDeleting(false);
+    }
+  };
+
+  // Handle opening delete modal
+  const openDeleteModal = (feedbackId: string, subject: string, type: string) => {
+    setDeleteModal({
+      isOpen: true,
+      feedbackId,
+      feedbackSubject: subject,
+      feedbackType: type
+    });
+  };
+
+  // Handle confirming delete
+  const handleConfirmDelete = async () => {
+    const success = await deleteFeedback(deleteModal.feedbackId, deleteModal.feedbackType);
+    if (success) {
+      setDeleteModal({ isOpen: false, feedbackId: '', feedbackSubject: '', feedbackType: '' });
     }
   };
 
@@ -655,7 +725,19 @@ export function Feedback() {
                 )}
               </div>
             )}
-            <div className="mt-4 flex justify-end">
+            <div className="mt-4 flex justify-between items-center">
+              <div className="flex space-x-2">
+                {/* Only super admins can delete feedback */}
+                {user?.role === 'super_admin' && (
+                  <button
+                    onClick={() => openDeleteModal(feedback.id, feedback.subject, feedback.type)}
+                    className="inline-flex items-center px-3 py-2 text-sm font-medium text-red-600 hover:text-red-700 hover:bg-red-50 rounded-md transition-colors"
+                  >
+                    <Trash2 className="h-4 w-4 mr-1" />
+                    Delete
+                  </button>
+                )}
+              </div>
               <button
                 onClick={() => openResponseModal(feedback.id, feedback.subject)}
                 className="px-4 py-2 text-sm font-medium text-primary-600 hover:text-primary-700"
@@ -696,6 +778,59 @@ export function Feedback() {
                   className="px-4 py-2 text-sm font-medium text-white bg-primary-600 hover:bg-primary-700 rounded-md disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   Submit Response
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Delete Confirmation Modal */}
+      {deleteModal.isOpen && (
+        <div className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50">
+          <div className="relative top-20 mx-auto p-5 border w-96 shadow-lg rounded-md bg-white">
+            <div className="mt-3">
+              <div className="flex items-center mb-4">
+                <AlertTriangle className="h-6 w-6 text-red-600 mr-3" />
+                <h3 className="text-lg font-medium text-gray-900">
+                  Confirm Delete
+                </h3>
+              </div>
+              <div className="mb-4">
+                <p className="text-sm text-gray-600">
+                  Are you sure you want to delete this {deleteModal.feedbackType === 'review' ? 'review' : 'feedback'}?
+                </p>
+                <p className="text-sm font-medium text-gray-900 mt-2">
+                  "{deleteModal.feedbackSubject}"
+                </p>
+                <p className="text-xs text-red-600 mt-2">
+                  This action cannot be undone.
+                </p>
+              </div>
+              <div className="flex justify-end space-x-3">
+                <button
+                  onClick={() => setDeleteModal({ isOpen: false, feedbackId: '', feedbackSubject: '', feedbackType: '' })}
+                  disabled={isDeleting}
+                  className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-md disabled:opacity-50"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleConfirmDelete}
+                  disabled={isDeleting}
+                  className="inline-flex items-center px-4 py-2 text-sm font-medium text-white bg-red-600 hover:bg-red-700 rounded-md disabled:opacity-50"
+                >
+                  {isDeleting ? (
+                    <>
+                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                      Deleting...
+                    </>
+                  ) : (
+                    <>
+                      <Trash2 className="h-4 w-4 mr-2" />
+                      Delete
+                    </>
+                  )}
                 </button>
               </div>
             </div>
