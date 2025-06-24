@@ -1,8 +1,24 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { OrderTable } from '../components/orders/OrderTable';
 import { useAuthStore } from '../store/authStore';
 import { supabase } from '../supabaseClient';
-import { Search, Download, RefreshCw } from 'lucide-react';
+import { Search, Download, RefreshCw, X } from 'lucide-react';
+
+/**
+ * Orders Page - Displays all orders done by users
+ *
+ * This page fetches and displays orders from two sources:
+ * 1. Orders table - Contains actual completed orders with full order details
+ * 2. Interests table - Contains order inquiries/interests that may become orders
+ *
+ * Features:
+ * - Combined view of all user orders and interests
+ * - Filtering by status and date range
+ * - Search across customer names, farmer names, products, and notes
+ * - Pagination for large datasets
+ * - Export to CSV functionality
+ * - Status management for super admins
+ */
 
 // Define the Order type
 interface Order {
@@ -20,29 +36,178 @@ export function Orders() {
   const [statusFilter, setStatusFilter] = useState('all');
   const [dateFilter, setDateFilter] = useState('all');
   const [searchTerm, setSearchTerm] = useState('');
+  const [searchInput, setSearchInput] = useState('');
   const [loading, setLoading] = useState(true);
+  const [searching, setSearching] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
   const [totalOrders, setTotalOrders] = useState(0);
   const user = useAuthStore((state) => state.user);
 
+  // Debounced search effect
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setSearchTerm(searchInput);
+    }, 500);
+
+    return () => clearTimeout(timer);
+  }, [searchInput]);
+
   useEffect(() => {
     fetchOrders();
   }, []);
 
   useEffect(() => {
+    // Reset to first page when filters change (except page changes)
+    if (page !== 1) {
+      setPage(1);
+    } else {
+      fetchOrders();
+    }
+  }, [statusFilter, dateFilter, searchTerm]);
+
+  useEffect(() => {
     fetchOrders();
-  }, [page, pageSize, statusFilter, dateFilter]);
+  }, [page, pageSize]);
 
   const fetchOrders = async () => {
     try {
-      setLoading(true);
+      if (searchTerm) {
+        setSearching(true);
+      } else {
+        setLoading(true);
+      }
       setError(null);
 
-      console.log('Fetching orders with filters:', { statusFilter, dateFilter, searchTerm });
+      console.log('Fetching orders with filters:', { statusFilter, dateFilter, searchTerm, page, pageSize });
 
-      // Start building the query for interests table (which represents orders)
+      // Fetch from both orders and interests tables to get all orders done by users
+      const [ordersResult, interestsResult] = await Promise.all([
+        // Fetch from orders table (actual completed orders)
+        fetchFromOrdersTable(),
+        // Fetch from interests table (order inquiries/interests)
+        fetchFromInterestsTable()
+      ]);
+
+      // Combine and sort all orders by date
+      const allOrders = [...ordersResult, ...interestsResult]
+        .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+
+      // Apply pagination to combined results
+      const startIndex = (page - 1) * pageSize;
+      const endIndex = startIndex + pageSize;
+      const paginatedOrders = allOrders.slice(startIndex, endIndex);
+
+      setTotalOrders(allOrders.length);
+      setOrders(paginatedOrders);
+
+      console.log('Total combined orders:', allOrders.length);
+      console.log('Paginated orders:', paginatedOrders);
+
+    } catch (err) {
+      console.error('Error fetching orders:', err);
+      setError('Failed to fetch orders. Check console for details.');
+    } finally {
+      setLoading(false);
+      setSearching(false);
+    }
+  };
+
+  const fetchFromOrdersTable = async (): Promise<Order[]> => {
+    try {
+      // Build query for orders table
+      let query = supabase
+        .from('orders')
+        .select(`
+          *,
+          listing:listings!inner(
+            id,
+            name,
+            price,
+            seller_name,
+            type
+          ),
+          buyer:users!buyer_id(
+            id,
+            full_name,
+            email
+          ),
+          seller:users!seller_id(
+            id,
+            full_name,
+            email
+          )
+        `);
+
+      // Apply filters
+      if (statusFilter !== 'all') {
+        query = query.eq('status', statusFilter);
+      }
+
+      if (dateFilter !== 'all') {
+        const now = new Date();
+        let fromDate;
+
+        switch (dateFilter) {
+          case '7days':
+            fromDate = new Date(now.setDate(now.getDate() - 7));
+            break;
+          case '30days':
+            fromDate = new Date(now.setDate(now.getDate() - 30));
+            break;
+          case '3months':
+            fromDate = new Date(now.setMonth(now.getMonth() - 3));
+            break;
+        }
+
+        if (fromDate) {
+          query = query.gte('created_at', fromDate.toISOString());
+        }
+      }
+
+      if (searchTerm && searchTerm.trim()) {
+        // Search in notes field and related data
+        const searchPattern = `%${searchTerm.trim()}%`;
+        query = query.or(`notes.ilike.%${searchTerm.trim()}%,listing.name.ilike.%${searchTerm.trim()}%,listing.seller_name.ilike.%${searchTerm.trim()}%,buyer.full_name.ilike.%${searchTerm.trim()}%,buyer.email.ilike.%${searchTerm.trim()}%,seller.full_name.ilike.%${searchTerm.trim()}%`);
+      }
+
+      const { data, error } = await query.order('created_at', { ascending: false });
+
+      if (error) {
+        console.error('Error fetching orders:', error);
+        return [];
+      }
+
+      console.log('Fetched orders data:', data);
+
+      if (data && data.length > 0) {
+        return data.map((order: any) => {
+          const productName = order.listing?.name || 'Unknown Product';
+          const products = [productName];
+
+          return {
+            id: order.id || '',
+            customer: order.buyer?.full_name || order.buyer?.email || 'Unknown Customer',
+            farmer: order.seller?.full_name || order.listing?.seller_name || 'Unknown Farmer',
+            products: products,
+            total: parseFloat(order.total_amount || '0'),
+            status: order.status || 'pending',
+            date: order.created_at || new Date().toISOString()
+          };
+        });
+      }
+
+      return [];
+    } catch (err) {
+      console.error('Error fetching from orders table:', err);
+      return [];
+    }
+  };
+
+  const fetchFromInterestsTable = async (): Promise<Order[]> => {
+    try {
+      // Build query for interests table
       let query = supabase
         .from('interests')
         .select(`
@@ -87,42 +252,23 @@ export function Orders() {
         }
       }
 
-      if (searchTerm) {
+      if (searchTerm && searchTerm.trim()) {
         // Search in note field and related data
-        query = query.ilike('note', `%${searchTerm}%`);
+        const searchPattern = `%${searchTerm.trim()}%`;
+        query = query.or(`note.ilike.${searchPattern},listings.name.ilike.${searchPattern},listings.seller_name.ilike.${searchPattern},buyer.full_name.ilike.${searchPattern},buyer.email.ilike.${searchPattern}`);
       }
 
-      // First, get the count
-      const { count, error: countError } = await supabase
-        .from('interests')
-        .select('*', { count: 'exact', head: true });
+      const { data, error } = await query.order('created_at', { ascending: false });
 
-      if (countError) {
-        console.error('Error counting interests:', countError);
-        throw countError;
-      }
-
-      setTotalOrders(count || 0);
-      console.log('Total interests count:', count);
-
-      // Then get paginated data with relationships
-      const { data, error: dataError } = await query
-        .order('created_at', { ascending: false })
-        .range((page - 1) * pageSize, page * pageSize - 1);
-
-      if (dataError) {
-        console.error('Error fetching interests data:', dataError);
-        throw dataError;
+      if (error) {
+        console.error('Error fetching interests:', error);
+        return [];
       }
 
       console.log('Fetched interests data:', data);
 
       if (data && data.length > 0) {
-        // Map the interests data to our Order interface
-        const formattedOrders = data.map((interest: any) => {
-          console.log('Processing interest:', interest);
-
-          // Extract product name from listing
+        return data.map((interest: any) => {
           const productName = interest.listings?.name || 'Unknown Product';
           const products = [productName];
 
@@ -131,7 +277,7 @@ export function Orders() {
           const total = price * (interest.quantity || 1);
 
           return {
-            id: interest.id || '',
+            id: `interest_${interest.id}`, // Prefix to distinguish from actual orders
             customer: interest.buyer?.full_name || interest.buyer?.email || 'Unknown Customer',
             farmer: interest.listings?.seller_name || 'Unknown Farmer',
             products: products,
@@ -140,18 +286,12 @@ export function Orders() {
             date: interest.created_at || new Date().toISOString()
           };
         });
-
-        console.log('Formatted orders:', formattedOrders);
-        setOrders(formattedOrders);
-      } else {
-        console.log('No interests found in database');
-        setOrders([]);
       }
+
+      return [];
     } catch (err) {
-      console.error('Error fetching orders:', err);
-      setError('Failed to fetch orders. Check console for details.');
-    } finally {
-      setLoading(false);
+      console.error('Error fetching from interests table:', err);
+      return [];
     }
   };
 
@@ -159,11 +299,16 @@ export function Orders() {
     try {
       setLoading(true);
 
-      // Update in database (interests table)
+      // Determine if this is an interest or an actual order based on ID prefix
+      const isInterest = orderId.startsWith('interest_');
+      const actualId = isInterest ? orderId.replace('interest_', '') : orderId;
+      const tableName = isInterest ? 'interests' : 'orders';
+
+      // Update in database
       const { error } = await supabase
-        .from('interests')
+        .from(tableName)
         .update({ status: newStatus })
-        .eq('id', orderId);
+        .eq('id', actualId);
 
       if (error) throw error;
 
@@ -172,9 +317,9 @@ export function Orders() {
         order.id === orderId ? { ...order, status: newStatus } : order
       ));
 
-      console.log(`Interest ${orderId} status updated to ${newStatus}`);
+      console.log(`${isInterest ? 'Interest' : 'Order'} ${orderId} status updated to ${newStatus}`);
     } catch (err) {
-      console.error('Error updating interest status:', err);
+      console.error('Error updating order status:', err);
       setError('Failed to update order status. Please try again.');
     } finally {
       setLoading(false);
@@ -214,7 +359,16 @@ export function Orders() {
   return (
     <div className="space-y-6">
       <div className="flex justify-between items-center">
-        <h2 className="text-lg font-semibold text-gray-900">Orders</h2>
+        <div>
+          <h2 className="text-lg font-semibold text-gray-900">All User Orders</h2>
+          <p className="text-sm text-gray-600 mt-1">
+            {searchTerm ? (
+              <>Showing search results for "{searchTerm}" ({totalOrders} found)</>
+            ) : (
+              <>Showing completed orders and order inquiries from all users</>
+            )}
+          </p>
+        </div>
         <div className="flex items-center gap-2">
           <button 
             onClick={() => fetchOrders()}
@@ -223,30 +377,45 @@ export function Orders() {
           >
             <RefreshCw className="h-5 w-5 text-gray-500" />
           </button>
-          <button 
+          {/* <button 
             onClick={handleExport}
             className="p-2 rounded-lg hover:bg-gray-100"
             title="Export to CSV"
             disabled={orders.length === 0}
           >
             <Download className="h-5 w-5 text-gray-500" />
-          </button>
+          </button> */}
         </div>
       </div>
 
       <div className="flex flex-col md:flex-row gap-4 items-start md:items-center">
         <div className="relative flex-grow">
           <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-            <Search className="h-5 w-5 text-gray-400" />
+            {searching ? (
+              <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-primary-600"></div>
+            ) : (
+              <Search className="h-5 w-5 text-gray-400" />
+            )}
           </div>
           <input
             type="text"
-            placeholder="Search orders..."
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            onKeyDown={(e) => e.key === 'Enter' && fetchOrders()}
-            className="pl-10 pr-4 py-2 border border-gray-300 rounded-lg w-full"
+            placeholder="Search orders by customer, farmer, product, or notes..."
+            value={searchInput}
+            onChange={(e) => setSearchInput(e.target.value)}
+            className="pl-10 pr-10 py-2 border border-gray-300 rounded-lg w-full focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
           />
+          {searchInput && (
+            <button
+              onClick={() => {
+                setSearchInput('');
+                setSearchTerm('');
+              }}
+              className="absolute inset-y-0 right-0 pr-3 flex items-center hover:text-red-600"
+              title="Clear search"
+            >
+              <X className="h-4 w-4 text-gray-400" />
+            </button>
+          )}
         </div>
         <div className="flex gap-2">
           <select
@@ -289,8 +458,23 @@ export function Orders() {
         </div>
       ) : (
         <>
-          <OrderTable 
-            orders={orders} 
+          {/* Legend */}
+          <div className="bg-gray-50 border border-gray-200 rounded-lg p-4 mb-4">
+            <h3 className="text-sm font-medium text-gray-900 mb-2">Legend</h3>
+            <div className="flex flex-wrap gap-4 text-xs">
+              <div className="flex items-center space-x-2">
+                <span className="px-2 py-1 bg-green-100 text-green-800 rounded-full">Order</span>
+                <span className="text-gray-600">Completed orders from the orders table</span>
+              </div>
+              <div className="flex items-center space-x-2">
+                <span className="px-2 py-1 bg-blue-100 text-blue-800 rounded-full">Interest</span>
+                <span className="text-gray-600">Order inquiries from the interests table</span>
+              </div>
+            </div>
+          </div>
+
+          <OrderTable
+            orders={orders}
             onStatusChange={user?.role === 'super_admin' ? handleStatusChange : undefined}
           />
           

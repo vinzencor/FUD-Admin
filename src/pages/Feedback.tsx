@@ -520,14 +520,14 @@ export function Feedback() {
             <RefreshCw className={`h-4 w-4 mr-2 ${loading ? 'animate-spin' : ''}`} />
             Refresh
           </button>
-          <button
+          {/* <button
             onClick={exportToCSV}
             disabled={filteredFeedback.length === 0}
             className="inline-flex items-center px-3 py-2 border border-gray-300 shadow-sm text-sm leading-4 font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 disabled:opacity-50"
           >
             <Download className="h-4 w-4 mr-2" />
             Export CSV
-          </button>
+          </button> */}
           <select
             value={selectedType}
             onChange={(e) => setSelectedType(e.target.value)}
@@ -702,7 +702,7 @@ export function Feedback() {
                   )}
                 </div>
               </div>
-              <select
+              {/* <select
                 value={feedback.status}
                 onChange={(e) => handleStatusChange(feedback.id, e.target.value as Feedback['status'])}
                 className={`px-3 py-1 rounded-full text-sm ${getStatusColor(feedback.status)}`}
@@ -710,7 +710,7 @@ export function Feedback() {
                 <option value="new">New</option>
                 <option value="in_progress">In Progress</option>
                 <option value="resolved">Resolved</option>
-              </select>
+              </select> */}
             </div>
             <div className="mt-4">
               <h4 className="text-md font-medium text-gray-900">{feedback.subject}</h4>
@@ -726,6 +726,14 @@ export function Feedback() {
               </div>
             )}
             <div className="mt-4 flex justify-between items-center">
+              {/* <div className="flex space-x-2">
+                <button
+                  onClick={() => openResponseModal(feedback.id, feedback.subject)}
+                  className="px-4 py-2 text-sm font-medium text-primary-600 hover:text-primary-700"
+                >
+                  {feedback.response ? 'Update Response' : 'Add Response'}
+                </button>
+              </div> */}
               <div className="flex space-x-2">
                 {/* Only super admins can delete feedback */}
                 {user?.role === 'super_admin' && (
@@ -738,12 +746,6 @@ export function Feedback() {
                   </button>
                 )}
               </div>
-              <button
-                onClick={() => openResponseModal(feedback.id, feedback.subject)}
-                className="px-4 py-2 text-sm font-medium text-primary-600 hover:text-primary-700"
-              >
-                {feedback.response ? 'Update Response' : 'Add Response'}
-              </button>
             </div>
           </div>
           ))
