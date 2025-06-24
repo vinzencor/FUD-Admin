@@ -166,12 +166,6 @@ export function Orders() {
         }
       }
 
-      if (searchTerm && searchTerm.trim()) {
-        // Search in notes field and related data
-        const searchPattern = `%${searchTerm.trim()}%`;
-        query = query.or(`notes.ilike.%${searchTerm.trim()}%,listing.name.ilike.%${searchTerm.trim()}%,listing.seller_name.ilike.%${searchTerm.trim()}%,buyer.full_name.ilike.%${searchTerm.trim()}%,buyer.email.ilike.%${searchTerm.trim()}%,seller.full_name.ilike.%${searchTerm.trim()}%`);
-      }
-
       const { data, error } = await query.order('created_at', { ascending: false });
 
       if (error) {
@@ -250,12 +244,6 @@ export function Orders() {
         if (fromDate) {
           query = query.gte('created_at', fromDate.toISOString());
         }
-      }
-
-      if (searchTerm && searchTerm.trim()) {
-        // Search in note field and related data
-        const searchPattern = `%${searchTerm.trim()}%`;
-        query = query.or(`note.ilike.${searchPattern},listings.name.ilike.${searchPattern},listings.seller_name.ilike.${searchPattern},buyer.full_name.ilike.${searchPattern},buyer.email.ilike.${searchPattern}`);
       }
 
       const { data, error } = await query.order('created_at', { ascending: false });
@@ -363,9 +351,14 @@ export function Orders() {
           <h2 className="text-lg font-semibold text-gray-900">All User Orders</h2>
           <p className="text-sm text-gray-600 mt-1">
             {searchTerm ? (
-              <>Showing search results for "{searchTerm}" ({totalOrders} found)</>
+              <span className="flex items-center gap-2">
+                <span>Search results for "{searchTerm}"</span>
+                <span className="px-2 py-1 bg-blue-100 text-blue-800 rounded-full text-xs font-medium">
+                  {totalOrders} found
+                </span>
+              </span>
             ) : (
-              <>Showing completed orders and order inquiries from all users</>
+              <>Showing completed orders and order inquiries from all users ({totalOrders} total)</>
             )}
           </p>
         </div>
@@ -399,7 +392,7 @@ export function Orders() {
           </div>
           <input
             type="text"
-            placeholder="Search orders by customer, farmer, product, or notes..."
+            placeholder="Search by customer name, product name, farmer name, or email..."
             value={searchInput}
             onChange={(e) => setSearchInput(e.target.value)}
             className="pl-10 pr-10 py-2 border border-gray-300 rounded-lg w-full focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
@@ -443,6 +436,38 @@ export function Orders() {
         </div>
       </div>
 
+      {/* Search Help */}
+      {searchInput && !searchTerm && (
+        <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
+          <p className="text-sm text-blue-800">
+            <strong>Search Tips:</strong> You can search by customer name (e.g., "John Smith"),
+            product name (e.g., "Tomatoes"), farmer name, or email address.
+            The search is case-insensitive and will find partial matches.
+          </p>
+        </div>
+      )}
+
+      {/* Active Search Indicator */}
+      {searchTerm && (
+        <div className="bg-green-50 border border-green-200 rounded-lg p-3 flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <Search className="h-4 w-4 text-green-600" />
+            <span className="text-sm text-green-800">
+              Active search: <strong>"{searchTerm}"</strong>
+            </span>
+          </div>
+          <button
+            onClick={() => {
+              setSearchInput('');
+              setSearchTerm('');
+            }}
+            className="text-green-600 hover:text-green-800 text-sm underline"
+          >
+            Clear search
+          </button>
+        </div>
+      )}
+
       {loading ? (
         <div className="flex justify-center py-8">
           <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary-600"></div>
@@ -453,8 +478,34 @@ export function Orders() {
         </div>
       ) : orders.length === 0 ? (
         <div className="bg-gray-50 border border-gray-200 text-gray-700 px-4 py-8 rounded text-center">
-          <p className="text-lg font-medium">No orders found</p>
-          <p className="text-sm mt-2">Try adjusting your filters or adding new orders</p>
+          {searchTerm ? (
+            <>
+              <p className="text-lg font-medium">No orders found for "{searchTerm}"</p>
+              <p className="text-sm mt-2">
+                Try searching for:
+              </p>
+              <ul className="text-sm mt-2 space-y-1">
+                <li>• Customer names (e.g., "John Smith")</li>
+                <li>• Product names (e.g., "Tomatoes", "Apples")</li>
+                <li>• Farmer/seller names</li>
+                <li>• Email addresses</li>
+              </ul>
+              <button
+                onClick={() => {
+                  setSearchInput('');
+                  setSearchTerm('');
+                }}
+                className="mt-4 px-4 py-2 bg-primary-600 text-white rounded-md hover:bg-primary-700 text-sm"
+              >
+                Clear Search
+              </button>
+            </>
+          ) : (
+            <>
+              <p className="text-lg font-medium">No orders found</p>
+              <p className="text-sm mt-2">Try adjusting your filters or check back later for new orders</p>
+            </>
+          )}
         </div>
       ) : (
         <>
