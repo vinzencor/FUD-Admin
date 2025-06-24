@@ -12,6 +12,7 @@ import {
 import { useNavigate } from 'react-router-dom';
 import { useAuthStore } from '../store/authStore';
 import { supabase } from '../supabaseClient';
+import { updateUserRole, roleLabels, roleDescriptions } from '../utils/roleManagement';
 
 interface Member {
   id: string;
@@ -58,10 +59,27 @@ export function Members() {
   useEffect(() => {
     const fetchMembers = async () => {
       try {
-        // First, get users from the database
-        const { data: usersData, error: usersError } = await supabase
-          .from('users')
-          .select('id, full_name, email, mobile_phone, country, state, city, created_at, default_mode');
+        // First, try to get users from the database including role
+        let usersData: any[] = [];
+        let usersError: any = null;
+
+        try {
+          const result = await supabase
+            .from('users')
+            .select('id, full_name, email, mobile_phone, country, state, city, created_at, default_mode, role');
+
+          usersData = result.data || [];
+          usersError = result.error;
+        } catch (err) {
+          // If role column doesn't exist, try without it
+          console.log('Role column might not exist, trying without it...');
+          const result = await supabase
+            .from('users')
+            .select('id, full_name, email, mobile_phone, country, state, city, created_at, default_mode');
+
+          usersData = result.data || [];
+          usersError = result.error;
+        }
 
         if (usersError) {
           console.error('Failed to fetch members:', usersError);
@@ -78,23 +96,9 @@ export function Members() {
           console.error('Failed to fetch seller profiles:', sellerError);
         }
 
-        // Then, get auth users to fetch roles (only super admin can do this)
-        let authUsers: any[] = [];
-        if (user?.role === 'super_admin') {
-          try {
-            const { data: authData, error: authError } = await supabase.auth.admin.listUsers();
-            if (!authError && authData?.users) {
-              authUsers = authData.users;
-            }
-          } catch (err) {
-            console.log('Could not fetch auth users:', err);
-          }
-        }
-
         const formatted = usersData.map((row) => {
-          // Find corresponding auth user to get role
-          const authUser = authUsers.find(au => au.id === row.id);
-          const userRole = authUser?.app_metadata?.role || 'user';
+          // Get role from database, default to 'user' if not set
+          const userRole = row.role || 'user';
 
           // Check if user is a seller
           const sellerProfile = sellerProfiles?.find(sp => sp.user_id === row.id);
@@ -209,6 +213,12 @@ export function Members() {
   });
 
   const handleDeleteMember = async (memberId: string) => {
+    // Only super admin can delete members
+    if (user?.role !== 'super_admin') {
+      alert('Only Super Admins can delete members.');
+      return;
+    }
+
     const confirmed = window.confirm('Are you sure you want to delete this member?');
     if (!confirmed) return;
 
@@ -219,15 +229,23 @@ export function Members() {
       alert('Failed to delete member.');
     } else {
       setMembers(members.filter((m) => m.id !== memberId));
+      alert('Member deleted successfully.');
     }
   };
   const handleSaveEdits = async (updatedMember: Member) => {
+    // Only super admin can edit members
+    if (user?.role !== 'super_admin') {
+      alert('Only Super Admins can edit member details.');
+      return;
+    }
+
     const { error } = await supabase
       .from('users')
       .update({
         full_name: updatedMember.name,
         mobile_phone: updatedMember.phone,
-        // add more fields as needed
+        city: updatedMember.location.split(',')[0]?.trim(),
+        state: updatedMember.location.split(',')[1]?.trim(),
       })
       .eq('id', updatedMember.id);
 
@@ -248,14 +266,23 @@ export function Members() {
         return;
       }
 
-      // Update role in Supabase auth
-      const { error } = await supabase.auth.admin.updateUserById(memberId, {
-        app_metadata: { role: newRole }
-      });
+      // Get member details for confirmation
+      const member = members.find(m => m.id === memberId);
+      if (!member) return;
 
-      if (error) {
-        console.error('Error updating user role:', error);
-        alert('Failed to update user role.');
+      // Confirmation dialog with role details
+      const confirmed = window.confirm(
+        `Are you sure you want to change ${member.name}'s role from ${getRoleLabel(member.role || 'user')} to ${roleLabels[newRole]}?\n\n` +
+        `${roleDescriptions[newRole]}`
+      );
+
+      if (!confirmed) return;
+
+      // Use the utility function to update role
+      const result = await updateUserRole(memberId, newRole);
+
+      if (!result.success) {
+        alert(result.error || 'Failed to update user role.');
         return;
       }
 
@@ -264,7 +291,7 @@ export function Members() {
         member.id === memberId ? { ...member, role: newRole } : member
       ));
 
-      alert(`User role updated to ${newRole} successfully.`);
+      alert(`User role updated to ${roleLabels[newRole]} successfully.`);
       setShowRoleModal(false);
       setSelectedMember(null);
     } catch (err) {
@@ -338,7 +365,21 @@ export function Members() {
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row justify-between items-center gap-4">
         <div>
-          <h2 className="text-2xl font-semibold text-gray-900">Members</h2>
+          <div className="flex items-center gap-3">
+            <h2 className="text-2xl font-semibold text-gray-900">Members</h2>
+            {user?.role === 'super_admin' && (
+              <span className="px-3 py-1 text-xs font-medium rounded-full bg-purple-100 text-purple-800 flex items-center gap-1">
+                <Crown className="h-3 w-3" />
+                Super Admin
+              </span>
+            )}
+            {user?.role === 'admin' && (
+              <span className="px-3 py-1 text-xs font-medium rounded-full bg-blue-100 text-blue-800 flex items-center gap-1">
+                <AlertTriangle className="h-3 w-3" />
+                Admin (View Only)
+              </span>
+            )}
+          </div>
           <div className="flex flex-wrap gap-4 mt-2 text-sm text-gray-600">
             <span>Total: {members.length}</span>
             <span>Buyers: {members.filter(m => !m.isSeller && m.defaultMode === 'buyer').length}</span>
@@ -346,17 +387,23 @@ export function Members() {
             <span>Both: {members.filter(m => m.isSeller && m.defaultMode === 'both').length}</span>
           </div>
           {user?.role === 'super_admin' && (
-            <p className="text-sm text-gray-600 mt-1">
-              <Crown className="inline h-4 w-4 mr-1" />
-              You can assign user roles as a Super Admin
+            <p className="text-sm text-green-600 mt-1 flex items-center gap-1">
+              <CheckCircle className="h-4 w-4" />
+              Full access: Edit, delete, and assign user roles
+            </p>
+          )}
+          {user?.role === 'admin' && (
+            <p className="text-sm text-orange-600 mt-1 flex items-center gap-1">
+              <AlertTriangle className="h-4 w-4" />
+              Limited access: View members only - no editing, deleting, or role assignment
             </p>
           )}
         </div>
-        <div className="flex items-center gap-3">
+        {/* <div className="flex items-center gap-3">
           <Button variant="outline" size="sm" className="hidden md:flex items-center gap-2">
             Export Members
           </Button>
-        </div>
+        </div> */}
       </div>
 
       <div className="bg-white rounded-lg shadow-sm border border-gray-200">
@@ -485,28 +532,38 @@ export function Members() {
                     </div>
                   </td>
                   <td className="px-6 py-4 text-center">
-                    {expandedRowId === member.id ? (
-                      <div className="flex justify-center gap-2 flex-wrap">
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => {
-                            setSelectedMember(member);
-                            const [city, state] = member.location.split(',').map((s) => s.trim());
-                            setEditForm({
-                              name: member.name,
-                              email: member.email,
-                              phone: member.phone,
-                              city: city || '',
-                              state: state || '',
-                            });
-                            setShowEditModal(true);
-                          }}
-                        >
-                          Edit
-                        </Button>
+                    {user?.role === 'admin' ? (
+                      // Admin users can only view - no actions available
+                      <div className="flex justify-center">
+                        <span className="text-xs text-gray-500 px-2 py-1 bg-gray-100 rounded">
+                          View Only
+                        </span>
+                      </div>
+                    ) : user?.role === 'super_admin' ? (
+                      // Super admin has full access
+                      expandedRowId === member.id ? (
+                        <div className="flex justify-center gap-2 flex-wrap">
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => {
+                              setSelectedMember(member);
+                              const [city, state] = member.location.split(',').map((s) => s.trim());
+                              setEditForm({
+                                name: member.name,
+                                email: member.email,
+                                phone: member.phone,
+                                city: city || '',
+                                state: state || '',
+                              });
+                              setShowEditModal(true);
+                            }}
+                            className="flex items-center gap-1"
+                          >
+                            <Edit className="h-3 w-3" />
+                            Edit
+                          </Button>
 
-                        {user?.role === 'super_admin' && (
                           <Button
                             variant="outline"
                             size="sm"
@@ -520,33 +577,35 @@ export function Members() {
                             <Crown className="h-3 w-3" />
                             Role
                           </Button>
-                        )}
 
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => handleDeleteMember(member.id)}
-                        >
-                          Delete
-                        </Button>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => handleDeleteMember(member.id)}
+                            className="flex items-center gap-1 text-red-600 hover:text-red-700"
+                          >
+                            <Trash2 className="h-3 w-3" />
+                            Delete
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => setExpandedRowId(null)}
+                          >
+                            Cancel
+                          </Button>
+                        </div>
+                      ) : (
                         <Button
                           variant="ghost"
                           size="sm"
-                          onClick={() => setExpandedRowId(null)}
+                          className="h-8 w-8 p-0"
+                          onClick={() => setExpandedRowId(member.id)}
                         >
-                          Cancel
+                          <MoreVertical className="h-4 w-4" />
                         </Button>
-                      </div>
-                    ) : (
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        className="h-8 w-8 p-0"
-                        onClick={() => setExpandedRowId(member.id)}
-                      >
-                        <MoreVertical className="h-4 w-4" />
-                      </Button>
-                    )}
+                      )
+                    ) : null}
                   </td>
 
                 </tr>
@@ -779,16 +838,46 @@ export function Members() {
                   onChange={(e) => setSelectedRole(e.target.value as 'user' | 'admin' | 'super_admin')}
                   className="w-full px-3 py-2 border border-gray-300 rounded-md"
                 >
-                  <option value="user">User</option>
-                  <option value="admin">Admin</option>
-                  <option value="super_admin">Super Admin</option>
+                  <option value="user">User - Basic access only</option>
+                  <option value="admin">Admin - View-only admin features</option>
+                  <option value="super_admin">Super Admin - Full system access</option>
                 </select>
+              </div>
+
+              {/* Role Descriptions */}
+              <div className="space-y-3">
+                <div className="bg-gray-50 border border-gray-200 rounded-md p-3">
+                  <h4 className="text-sm font-medium text-gray-900 mb-2">Role Permissions:</h4>
+                  <div className="space-y-2 text-xs text-gray-600">
+                    <div className="flex items-start gap-2">
+                      <span className="px-2 py-1 bg-gray-100 text-gray-800 rounded text-xs">User</span>
+                      <span>Basic platform access, can buy/sell products</span>
+                    </div>
+                    <div className="flex items-start gap-2">
+                      <span className="px-2 py-1 bg-blue-100 text-blue-800 rounded text-xs">Admin</span>
+                      <span>View members, orders, and interests - no editing/deleting capabilities</span>
+                    </div>
+                    <div className="flex items-start gap-2">
+                      <span className="px-2 py-1 bg-purple-100 text-purple-800 rounded text-xs">Super Admin</span>
+                      <span>Full system access, can edit/delete members, assign roles, direct password changes</span>
+                    </div>
+                  </div>
+                </div>
               </div>
 
               <div className="bg-yellow-50 border border-yellow-200 rounded-md p-3">
                 <p className="text-sm text-yellow-800">
-                  <strong>Warning:</strong> Changing user roles will affect their access permissions.
-                  Admin users can manage members and orders, while Super Admins have full system access.
+                  <strong>Warning:</strong> Role changes take effect immediately and will affect the user's access permissions.
+                  {selectedRole === 'super_admin' && (
+                    <span className="block mt-1 font-medium">
+                      Super Admin role grants full system access including direct password management.
+                    </span>
+                  )}
+                  {selectedRole === 'admin' && (
+                    <span className="block mt-1">
+                      Admin role provides view-only access to admin features without editing capabilities.
+                    </span>
+                  )}
                 </p>
               </div>
             </div>

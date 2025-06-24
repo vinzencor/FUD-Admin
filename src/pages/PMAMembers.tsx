@@ -101,11 +101,11 @@ export function PMAMembers() {
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row justify-between items-center gap-4">
         <h2 className="text-2xl font-semibold text-gray-900">PMA Members</h2>
-        <div className="flex items-center gap-3">
+        {/* <div className="flex items-center gap-3">
           <Button variant="outline" size="sm" className="hidden md:flex items-center gap-2">
             Export PMA Members
           </Button>
-        </div>
+        </div> */}
       </div>
 
       <div className="bg-white rounded-lg shadow-sm border border-gray-200">

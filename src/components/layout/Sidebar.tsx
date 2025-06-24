@@ -23,7 +23,7 @@ export function Sidebar() {
   const navigation = [
     { name: 'Dashboard', to: `${basePath}/dashboard`, icon: LayoutDashboard },
     { name: 'Members', to: `${basePath}/members`, icon: Users },
-    { name: 'PMA Members', to: `${basePath}/pma-members`, icon: Crown },
+    // { name: 'PMA Members', to: `${basePath}/pma-members`, icon: Crown },
     { name: 'Orders', to: `${basePath}/orders`, icon: ShoppingBasket },
     { name: 'Interests', to: `${basePath}/interests`, icon: Heart },
     { name: 'Feedback', to: `${basePath}/feedback`, icon: MessageSquare },

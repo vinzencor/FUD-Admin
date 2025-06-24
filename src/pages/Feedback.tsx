@@ -520,14 +520,14 @@ export function Feedback() {
             <RefreshCw className={`h-4 w-4 mr-2 ${loading ? 'animate-spin' : ''}`} />
             Refresh
           </button>
-          <button
+          {/* <button
             onClick={exportToCSV}
             disabled={filteredFeedback.length === 0}
             className="inline-flex items-center px-3 py-2 border border-gray-300 shadow-sm text-sm leading-4 font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 disabled:opacity-50"
           >
             <Download className="h-4 w-4 mr-2" />
             Export CSV
-          </button>
+          </button> */}
           <select
             value={selectedType}
             onChange={(e) => setSelectedType(e.target.value)}

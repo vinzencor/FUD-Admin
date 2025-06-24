@@ -277,14 +277,14 @@ export function Interests() {
           >
             <RefreshCw className="h-5 w-5 text-gray-500" />
           </button>
-          <button 
+          {/* <button 
             onClick={handleExport}
             className="p-2 rounded-lg hover:bg-gray-100"
             title="Export to CSV"
             disabled={interests.length === 0}
           >
             <Download className="h-5 w-5 text-gray-500" />
-          </button>
+          </button> */}
         </div>
       </div>
 

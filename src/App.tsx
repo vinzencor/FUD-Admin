@@ -69,7 +69,7 @@ function App() {
           <Route index element={<Navigate to="/super-admin/dashboard" replace />} />
           <Route path="dashboard" element={<Dashboard />} />
           <Route path="members" element={<Members />} />
-          <Route path="pma-members" element={<PMAMembers />} />
+          {/* <Route path="pma-members" element={<PMAMembers />} /> */}
           <Route path="orders" element={<Orders />} />
           <Route path="interests" element={<Interests />} />
           <Route path="feedback" element={<Feedback />} />
@@ -88,7 +88,7 @@ function App() {
           <Route index element={<Navigate to="/admin/dashboard" replace />} />
           <Route path="dashboard" element={<Dashboard />} />
           <Route path="members" element={<Members />} />
-          <Route path="pma-members" element={<PMAMembers />} />
+          {/* <Route path="pma-members" element={<PMAMembers />} /> */}
           <Route path="orders" element={<Orders />} />
           <Route path="interests" element={<Interests />} />
           <Route path="feedback" element={<Feedback />} />

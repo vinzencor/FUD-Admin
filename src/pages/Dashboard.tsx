@@ -282,12 +282,12 @@ export function Dashboard() {
           icon={Users}
           description="Registered members"
         />
-        <StatCard
+        {/* <StatCard
           title="PMA Members"
           value={stats.pmaMembers}
           icon={Store}
           description="Active PMA members"
-        />
+        /> */}
         <StatCard
           title="Active Requests"
           value={stats.activeOrders}

@@ -1,8 +1,8 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { OrderTable } from '../components/orders/OrderTable';
 import { useAuthStore } from '../store/authStore';
 import { supabase } from '../supabaseClient';
-import { Search, Download, RefreshCw } from 'lucide-react';
+import { Search, Download, RefreshCw, X } from 'lucide-react';
 
 /**
  * Orders Page - Displays all orders done by users
@@ -36,27 +36,51 @@ export function Orders() {
   const [statusFilter, setStatusFilter] = useState('all');
   const [dateFilter, setDateFilter] = useState('all');
   const [searchTerm, setSearchTerm] = useState('');
+  const [searchInput, setSearchInput] = useState('');
   const [loading, setLoading] = useState(true);
+  const [searching, setSearching] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
   const [totalOrders, setTotalOrders] = useState(0);
   const user = useAuthStore((state) => state.user);
 
+  // Debounced search effect
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setSearchTerm(searchInput);
+    }, 500);
+
+    return () => clearTimeout(timer);
+  }, [searchInput]);
+
   useEffect(() => {
     fetchOrders();
   }, []);
 
   useEffect(() => {
+    // Reset to first page when filters change (except page changes)
+    if (page !== 1) {
+      setPage(1);
+    } else {
+      fetchOrders();
+    }
+  }, [statusFilter, dateFilter, searchTerm]);
+
+  useEffect(() => {
     fetchOrders();
-  }, [page, pageSize, statusFilter, dateFilter, searchTerm]);
+  }, [page, pageSize]);
 
   const fetchOrders = async () => {
     try {
-      setLoading(true);
+      if (searchTerm) {
+        setSearching(true);
+      } else {
+        setLoading(true);
+      }
       setError(null);
 
-      console.log('Fetching orders with filters:', { statusFilter, dateFilter, searchTerm });
+      console.log('Fetching orders with filters:', { statusFilter, dateFilter, searchTerm, page, pageSize });
 
       // Fetch from both orders and interests tables to get all orders done by users
       const [ordersResult, interestsResult] = await Promise.all([
@@ -86,6 +110,7 @@ export function Orders() {
       setError('Failed to fetch orders. Check console for details.');
     } finally {
       setLoading(false);
+      setSearching(false);
     }
   };
 
@@ -141,9 +166,10 @@ export function Orders() {
         }
       }
 
-      if (searchTerm) {
+      if (searchTerm && searchTerm.trim()) {
         // Search in notes field and related data
-        query = query.or(`notes.ilike.%${searchTerm}%,listing.name.ilike.%${searchTerm}%,listing.seller_name.ilike.%${searchTerm}%,buyer.full_name.ilike.%${searchTerm}%,buyer.email.ilike.%${searchTerm}%`);
+        const searchPattern = `%${searchTerm.trim()}%`;
+        query = query.or(`notes.ilike.%${searchTerm.trim()}%,listing.name.ilike.%${searchTerm.trim()}%,listing.seller_name.ilike.%${searchTerm.trim()}%,buyer.full_name.ilike.%${searchTerm.trim()}%,buyer.email.ilike.%${searchTerm.trim()}%,seller.full_name.ilike.%${searchTerm.trim()}%`);
       }
 
       const { data, error } = await query.order('created_at', { ascending: false });
@@ -226,9 +252,10 @@ export function Orders() {
         }
       }
 
-      if (searchTerm) {
+      if (searchTerm && searchTerm.trim()) {
         // Search in note field and related data
-        query = query.or(`note.ilike.%${searchTerm}%,listings.name.ilike.%${searchTerm}%,listings.seller_name.ilike.%${searchTerm}%,buyer.full_name.ilike.%${searchTerm}%,buyer.email.ilike.%${searchTerm}%`);
+        const searchPattern = `%${searchTerm.trim()}%`;
+        query = query.or(`note.ilike.${searchPattern},listings.name.ilike.${searchPattern},listings.seller_name.ilike.${searchPattern},buyer.full_name.ilike.${searchPattern},buyer.email.ilike.${searchPattern}`);
       }
 
       const { data, error } = await query.order('created_at', { ascending: false });
@@ -335,7 +362,11 @@ export function Orders() {
         <div>
           <h2 className="text-lg font-semibold text-gray-900">All User Orders</h2>
           <p className="text-sm text-gray-600 mt-1">
-            Showing completed orders and order inquiries from all users
+            {searchTerm ? (
+              <>Showing search results for "{searchTerm}" ({totalOrders} found)</>
+            ) : (
+              <>Showing completed orders and order inquiries from all users</>
+            )}
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -346,45 +377,45 @@ export function Orders() {
           >
             <RefreshCw className="h-5 w-5 text-gray-500" />
           </button>
-          <button 
+          {/* <button 
             onClick={handleExport}
             className="p-2 rounded-lg hover:bg-gray-100"
             title="Export to CSV"
             disabled={orders.length === 0}
           >
             <Download className="h-5 w-5 text-gray-500" />
-          </button>
+          </button> */}
         </div>
       </div>
 
       <div className="flex flex-col md:flex-row gap-4 items-start md:items-center">
         <div className="relative flex-grow">
           <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-            <Search className="h-5 w-5 text-gray-400" />
+            {searching ? (
+              <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-primary-600"></div>
+            ) : (
+              <Search className="h-5 w-5 text-gray-400" />
+            )}
           </div>
           <input
             type="text"
             placeholder="Search orders by customer, farmer, product, or notes..."
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter') {
-                setPage(1); // Reset to first page when searching
-                fetchOrders();
-              }
-            }}
-            className="pl-10 pr-12 py-2 border border-gray-300 rounded-lg w-full"
+            value={searchInput}
+            onChange={(e) => setSearchInput(e.target.value)}
+            className="pl-10 pr-10 py-2 border border-gray-300 rounded-lg w-full focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
           />
-          <button
-            onClick={() => {
-              setPage(1);
-              fetchOrders();
-            }}
-            className="absolute inset-y-0 right-0 pr-3 flex items-center hover:text-primary-600"
-            title="Search"
-          >
-            <Search className="h-4 w-4 text-gray-500" />
-          </button>
+          {searchInput && (
+            <button
+              onClick={() => {
+                setSearchInput('');
+                setSearchTerm('');
+              }}
+              className="absolute inset-y-0 right-0 pr-3 flex items-center hover:text-red-600"
+              title="Clear search"
+            >
+              <X className="h-4 w-4 text-gray-400" />
+            </button>
+          )}
         </div>
         <div className="flex gap-2">
           <select
