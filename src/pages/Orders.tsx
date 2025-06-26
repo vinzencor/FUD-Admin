@@ -90,11 +90,47 @@ export function Orders() {
         fetchFromInterestsTable()
       ]);
 
-      // Combine and sort all orders by date
-      const allOrders = [...ordersResult, ...interestsResult]
-        .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+      // Combine all orders
+      let allOrders = [...ordersResult, ...interestsResult];
 
-      // Apply pagination to combined results
+      // Apply client-side search if search term exists
+      if (searchTerm && searchTerm.trim()) {
+        const searchPattern = searchTerm.toLowerCase().trim();
+        console.log('Applying client-side search for:', searchPattern);
+        console.log('Total orders before search:', allOrders.length);
+
+        allOrders = allOrders.filter(order => {
+          const customer = order.customer.toLowerCase();
+          const farmer = order.farmer.toLowerCase();
+          const products = order.products.join(' ').toLowerCase();
+
+          const matchesCustomer = customer.includes(searchPattern);
+          const matchesFarmer = farmer.includes(searchPattern);
+          const matchesProducts = products.includes(searchPattern);
+
+          const matches = matchesCustomer || matchesFarmer || matchesProducts;
+
+          if (matches) {
+            console.log('Match found:', {
+              customer: order.customer,
+              farmer: order.farmer,
+              products: order.products,
+              matchesCustomer,
+              matchesFarmer,
+              matchesProducts
+            });
+          }
+
+          return matches;
+        });
+
+        console.log('Total orders after search:', allOrders.length);
+      }
+
+      // Sort all orders by date
+      allOrders.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+
+      // Apply pagination to filtered results
       const startIndex = (page - 1) * pageSize;
       const endIndex = startIndex + pageSize;
       const paginatedOrders = allOrders.slice(startIndex, endIndex);
@@ -116,7 +152,7 @@ export function Orders() {
 
   const fetchFromOrdersTable = async (): Promise<Order[]> => {
     try {
-      // Build query for orders table
+      // Build simple query for orders table - no search filters here
       let query = supabase
         .from('orders')
         .select(`
@@ -140,11 +176,12 @@ export function Orders() {
           )
         `);
 
-      // Apply filters
+      // Apply status filter only
       if (statusFilter !== 'all') {
         query = query.eq('status', statusFilter);
       }
 
+      // Apply date filter only
       if (dateFilter !== 'all') {
         const now = new Date();
         let fromDate;
@@ -201,7 +238,7 @@ export function Orders() {
 
   const fetchFromInterestsTable = async (): Promise<Order[]> => {
     try {
-      // Build query for interests table
+      // Build simple query for interests table - no search filters here
       let query = supabase
         .from('interests')
         .select(`
@@ -220,11 +257,12 @@ export function Orders() {
           )
         `);
 
-      // Apply filters
+      // Apply status filter only
       if (statusFilter !== 'all') {
         query = query.eq('status', statusFilter);
       }
 
+      // Apply date filter only
       if (dateFilter !== 'all') {
         const now = new Date();
         let fromDate;
@@ -392,7 +430,7 @@ export function Orders() {
           </div>
           <input
             type="text"
-            placeholder="Search by customer name, product name, farmer name, or email..."
+            placeholder="Search by customer name, product name, or farmer name..."
             value={searchInput}
             onChange={(e) => setSearchInput(e.target.value)}
             className="pl-10 pr-10 py-2 border border-gray-300 rounded-lg w-full focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
@@ -441,7 +479,7 @@ export function Orders() {
         <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
           <p className="text-sm text-blue-800">
             <strong>Search Tips:</strong> You can search by customer name (e.g., "John Smith"),
-            product name (e.g., "Tomatoes"), farmer name, or email address.
+            product name (e.g., "Tomatoes"), or farmer name.
             The search is case-insensitive and will find partial matches.
           </p>
         </div>
