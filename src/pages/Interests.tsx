@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useAuthStore } from '../store/authStore';
 import { supabase } from '../supabaseClient';
 import { Search, Download, RefreshCw, Eye, MessageSquare, User, Package } from 'lucide-react';
+import { exportWithLoading, generateFilename, formatDateForExport, formatCurrencyForExport, ExportColumn } from '../utils/exportUtils';
 
 /**
  * Interests Page - Displays all interests from all users
@@ -63,6 +64,8 @@ export function Interests() {
   const [totalInterests, setTotalInterests] = useState(0);
   const [selectedInterest, setSelectedInterest] = useState<Interest | null>(null);
   const [showDetailModal, setShowDetailModal] = useState(false);
+  const [exporting, setExporting] = useState(false);
+  const [exportMessage, setExportMessage] = useState<string | null>(null);
   const user = useAuthStore((state) => state.user);
 
   useEffect(() => {
@@ -193,39 +196,39 @@ export function Interests() {
     }
   };
 
-  const handleExport = () => {
-    // Create CSV content
-    const headers = [
-      'ID', 'Buyer Name', 'Buyer Email', 'Seller Name', 'Product', 
-      'Quantity', 'Unit Price', 'Total Value', 'Status', 'Note', 'Created Date'
-    ];
-    const csvContent = [
-      headers.join(','),
-      ...interests.map(interest => [
-        interest.id,
-        `"${interest.buyer?.full_name || 'Unknown'}"`,
-        `"${interest.buyer?.email || 'Unknown'}"`,
-        `"${interest.listing?.seller_name || 'Unknown'}"`,
-        `"${interest.listing?.name || 'Unknown'}"`,
-        interest.quantity,
-        `"${interest.listing?.price || '0'}"`,
-        (parseFloat(interest.listing?.price || '0') * interest.quantity).toFixed(2),
-        interest.status,
-        `"${interest.note || ''}"`,
-        new Date(interest.created_at).toLocaleString()
-      ].join(','))
-    ].join('\n');
-    
-    // Create and download file
-    const blob = new Blob([csvContent], { type: 'text/csv' });
-    const url = window.URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `interests-export-${new Date().toISOString().split('T')[0]}.csv`;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    window.URL.revokeObjectURL(url);
+  const handleExport = async () => {
+    const filename = generateFilename('interests');
+
+    // Transform interests data for export
+    const exportData = interests.map(interest => ({
+      id: interest.id,
+      buyer_name: interest.buyer?.full_name || 'Unknown',
+      buyer_email: interest.buyer?.email || 'Unknown',
+      seller_name: interest.listing?.seller_name || 'Unknown',
+      listing_name: interest.listing?.name || 'Unknown',
+      quantity: interest.quantity,
+      price: parseFloat(interest.listing?.price || '0'),
+      total_value: parseFloat(interest.listing?.price || '0') * interest.quantity,
+      status: interest.status,
+      message: interest.note || '',
+      created_at: interest.created_at,
+      updated_at: interest.updated_at
+    }));
+
+    await exportWithLoading(
+      () => Promise.resolve(exportData),
+      EXPORT_COLUMNS.INTERESTS,
+      filename,
+      setExporting,
+      (count) => {
+        setExportMessage(`Successfully exported ${count} interests`);
+        setTimeout(() => setExportMessage(null), 3000);
+      },
+      (error) => {
+        setExportMessage(`Export failed: ${error}`);
+        setTimeout(() => setExportMessage(null), 5000);
+      }
+    );
   };
 
   const getStatusIcon = (status: Interest['status']) => {
@@ -277,16 +280,27 @@ export function Interests() {
           >
             <RefreshCw className="h-5 w-5 text-gray-500" />
           </button>
-          {/* <button 
+          <button
             onClick={handleExport}
-            className="p-2 rounded-lg hover:bg-gray-100"
+            className="p-2 rounded-lg hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed"
             title="Export to CSV"
-            disabled={interests.length === 0}
+            disabled={interests.length === 0 || exporting}
           >
-            <Download className="h-5 w-5 text-gray-500" />
-          </button> */}
+            <Download className={`h-5 w-5 text-gray-500 ${exporting ? 'animate-spin' : ''}`} />
+          </button>
         </div>
       </div>
+
+      {/* Export Message */}
+      {exportMessage && (
+        <div className={`p-4 rounded-lg ${
+          exportMessage.includes('failed') || exportMessage.includes('Error')
+            ? 'bg-red-50 border border-red-200 text-red-700'
+            : 'bg-green-50 border border-green-200 text-green-700'
+        }`}>
+          {exportMessage}
+        </div>
+      )}
 
       {/* Filters and Search */}
       <div className="flex flex-col md:flex-row gap-4 items-start md:items-center">

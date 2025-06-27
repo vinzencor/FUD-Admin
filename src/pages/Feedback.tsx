@@ -505,12 +505,12 @@ export function Feedback() {
   return (
     <div className="space-y-6">
       <div className="flex justify-between items-center">
-        <div>
+        {/* <div>
           <h2 className="text-2xl font-semibold text-gray-900">Feedback Management</h2>
           <p className="text-sm text-gray-600 mt-1">
             Showing {filteredFeedback.length} of {feedbacks.length} feedback items
           </p>
-        </div>
+        </div> */}
         <div className="flex gap-2">
           <button
             onClick={fetchFeedback}
@@ -550,7 +550,7 @@ export function Feedback() {
               <option value="service">Service Reviews</option>
             </select>
           )}
-          <select
+          {/* <select
             value={selectedStatus}
             onChange={(e) => setSelectedStatus(e.target.value)}
             className="border border-gray-300 rounded-lg px-3 py-2"
@@ -559,13 +559,13 @@ export function Feedback() {
             <option value="new">New</option>
             <option value="in_progress">In Progress</option>
             <option value="resolved">Resolved</option>
-          </select>
+          </select> */}
         </div>
       </div>
 
       {/* Feedback Statistics */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-        <div className="bg-blue-50 p-4 rounded-lg">
+        {/* <div className="bg-blue-50 p-4 rounded-lg">
           <div className="flex items-center">
             <div className="flex-shrink-0">
               <div className="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center">
@@ -579,9 +579,9 @@ export function Feedback() {
               <p className="text-xs text-blue-600">Pending review</p>
             </div>
           </div>
-        </div>
+        </div> */}
 
-        <div className="bg-yellow-50 p-4 rounded-lg">
+        {/* <div className="bg-yellow-50 p-4 rounded-lg">
           <div className="flex items-center">
             <div className="flex-shrink-0">
               <div className="w-8 h-8 bg-yellow-100 rounded-full flex items-center justify-center">
@@ -611,7 +611,7 @@ export function Feedback() {
               <p className="text-xs text-green-600">Completed</p>
             </div>
           </div>
-        </div>
+        </div> */}
 
         <div className="bg-gray-50 p-4 rounded-lg">
           <div className="flex items-center">

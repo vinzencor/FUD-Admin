@@ -3,6 +3,7 @@ import { OrderTable } from '../components/orders/OrderTable';
 import { useAuthStore } from '../store/authStore';
 import { supabase } from '../supabaseClient';
 import { Search, Download, RefreshCw, X } from 'lucide-react';
+import { exportWithLoading, generateFilename, formatDateForExport, formatCurrencyForExport, formatArrayForExport, ExportColumn } from '../utils/exportUtils';
 
 /**
  * Orders Page - Displays all orders done by users
@@ -43,6 +44,8 @@ export function Orders() {
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
   const [totalOrders, setTotalOrders] = useState(0);
+  const [exporting, setExporting] = useState(false);
+  const [exportMessage, setExportMessage] = useState<string | null>(null);
   const user = useAuthStore((state) => state.user);
 
   // Debounced search effect
@@ -352,32 +355,33 @@ export function Orders() {
     }
   };
 
-  const handleExport = () => {
-    // Create CSV content
-    const headers = ['ID', 'Customer', 'Farmer', 'Products', 'Total', 'Status', 'Date'];
-    const csvContent = [
-      headers.join(','),
-      ...orders.map(order => [
-        order.id,
-        `"${order.customer}"`,
-        `"${order.farmer}"`,
-        `"${order.products.join(', ')}"`,
-        order.total.toFixed(2),
-        order.status,
-        new Date(order.date).toLocaleString()
-      ].join(','))
-    ].join('\n');
-    
-    // Create and download file
-    const blob = new Blob([csvContent], { type: 'text/csv' });
-    const url = window.URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `orders-export-${new Date().toISOString().split('T')[0]}.csv`;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    window.URL.revokeObjectURL(url);
+  const handleExport = async () => {
+    const filename = generateFilename('orders');
+
+    const exportColumns: ExportColumn[] = [
+      { key: 'id', label: 'Order ID' },
+      { key: 'customer', label: 'Customer' },
+      { key: 'farmer', label: 'Farmer' },
+      { key: 'products', label: 'Products', formatter: formatArrayForExport },
+      { key: 'total', label: 'Total', formatter: formatCurrencyForExport },
+      { key: 'status', label: 'Status' },
+      { key: 'date', label: 'Date', formatter: formatDateForExport }
+    ];
+
+    await exportWithLoading(
+      () => Promise.resolve(orders),
+      exportColumns,
+      filename,
+      setExporting,
+      (count) => {
+        setExportMessage(`Successfully exported ${count} orders`);
+        setTimeout(() => setExportMessage(null), 3000);
+      },
+      (error) => {
+        setExportMessage(`Export failed: ${error}`);
+        setTimeout(() => setExportMessage(null), 5000);
+      }
+    );
   };
 
   const totalPages = Math.ceil(totalOrders / pageSize);
@@ -408,16 +412,27 @@ export function Orders() {
           >
             <RefreshCw className="h-5 w-5 text-gray-500" />
           </button>
-          {/* <button 
+          <button
             onClick={handleExport}
-            className="p-2 rounded-lg hover:bg-gray-100"
+            className="p-2 rounded-lg hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed"
             title="Export to CSV"
-            disabled={orders.length === 0}
+            disabled={orders.length === 0 || exporting}
           >
-            <Download className="h-5 w-5 text-gray-500" />
-          </button> */}
+            <Download className={`h-5 w-5 text-gray-500 ${exporting ? 'animate-spin' : ''}`} />
+          </button>
         </div>
       </div>
+
+      {/* Export Message */}
+      {exportMessage && (
+        <div className={`p-4 rounded-lg ${
+          exportMessage.includes('failed') || exportMessage.includes('Error')
+            ? 'bg-red-50 border border-red-200 text-red-700'
+            : 'bg-green-50 border border-green-200 text-green-700'
+        }`}>
+          {exportMessage}
+        </div>
+      )}
 
       <div className="flex flex-col md:flex-row gap-4 items-start md:items-center">
         <div className="relative flex-grow">

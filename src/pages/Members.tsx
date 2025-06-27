@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Search, MoreVertical, CheckCircle, XCircle, AlertTriangle, Edit, Trash2, Crown, Store } from 'lucide-react';
+import { Search, MoreVertical, CheckCircle, XCircle, AlertTriangle, Edit, Trash2, Crown, Store, Download } from 'lucide-react';
 import { format, addMonths } from 'date-fns';
 import { Badge } from '../components/ui/badge';
 import { Button } from '../components/ui/button';
@@ -13,6 +13,7 @@ import { useNavigate } from 'react-router-dom';
 import { useAuthStore } from '../store/authStore';
 import { supabase } from '../supabaseClient';
 import { updateUserRole, roleLabels, roleDescriptions } from '../utils/roleManagement';
+import { exportWithLoading, generateFilename, formatDateForExport, formatBooleanForExport, EXPORT_COLUMNS } from '../utils/exportUtils';
 
 interface Member {
   id: string;
@@ -54,6 +55,8 @@ export function Members() {
     state: '',
   });
   const [selectedRole, setSelectedRole] = useState<'user' | 'admin' | 'super_admin'>('user');
+  const [exporting, setExporting] = useState(false);
+  const [exportMessage, setExportMessage] = useState<string | null>(null);
 
 
   useEffect(() => {
@@ -352,6 +355,52 @@ export function Members() {
     }
   };
 
+  const handleExportMembers = async () => {
+    const filename = generateFilename('members');
+
+    // Transform members data for export
+    const exportData = filteredMembers.map(member => ({
+      full_name: member.name,
+      email: member.email,
+      role: member.role || 'user',
+      defaultMode: member.defaultMode,
+      phone: member.phone,
+      address: '', // Not available in current data
+      city: '', // Not available in current data
+      state: '', // Not available in current data
+      country: member.location,
+      zipcode: '', // Not available in current data
+      created_at: member.joinDate,
+      updated_at: member.lastActive,
+      is_seller: member.isSeller,
+      seller_status: member.isSeller ? (member.sellerInfo?.isApproved ? 'Approved' : 'Pending') : 'N/A',
+      user_type: getUserTypeLabel(member)
+    }));
+
+    // Custom export columns for members
+    const exportColumns = [
+      ...EXPORT_COLUMNS.USERS,
+      { key: 'is_seller', label: 'Is Seller', formatter: formatBooleanForExport },
+      { key: 'seller_status', label: 'Seller Status' },
+      { key: 'user_type', label: 'User Type' }
+    ];
+
+    await exportWithLoading(
+      () => Promise.resolve(exportData),
+      exportColumns,
+      filename,
+      setExporting,
+      (count) => {
+        setExportMessage(`Successfully exported ${count} members`);
+        setTimeout(() => setExportMessage(null), 3000);
+      },
+      (error) => {
+        setExportMessage(`Export failed: ${error}`);
+        setTimeout(() => setExportMessage(null), 5000);
+      }
+    );
+  };
+
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
@@ -399,12 +448,28 @@ export function Members() {
             </p>
           )}
         </div>
-        {/* <div className="flex items-center gap-3">
-          <Button variant="outline" size="sm" className="hidden md:flex items-center gap-2">
-            Export Members
-          </Button>
-        </div> */}
+        <div className="flex items-center gap-3">
+          <button
+            onClick={handleExportMembers}
+            disabled={exporting || filteredMembers.length === 0}
+            className="flex items-center gap-2 px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 disabled:opacity-50 disabled:cursor-not-allowed text-sm"
+          >
+            <Download className={`h-4 w-4 ${exporting ? 'animate-spin' : ''}`} />
+            {exporting ? 'Exporting...' : 'Export Members'}
+          </button>
+        </div>
       </div>
+
+      {/* Export Message */}
+      {exportMessage && (
+        <div className={`p-4 rounded-lg ${
+          exportMessage.includes('failed') || exportMessage.includes('Error')
+            ? 'bg-red-50 border border-red-200 text-red-700'
+            : 'bg-green-50 border border-green-200 text-green-700'
+        }`}>
+          {exportMessage}
+        </div>
+      )}
 
       <div className="bg-white rounded-lg shadow-sm border border-gray-200">
         <div className="p-4 border-b border-gray-200">

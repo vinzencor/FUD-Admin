@@ -1,14 +1,18 @@
 import React, { useState, useEffect } from 'react';
-import { Users, ShoppingBag, Store, ArrowUpRight } from 'lucide-react';
+import { Users, ShoppingBag, Store, ArrowUpRight, MessageSquare, FileText, Activity } from 'lucide-react';
 import { StatCard } from '../components/dashboard/StatCard';
 import { useAuthStore } from '../store/authStore';
 import { supabase } from '../supabaseClient';
 import { Link } from 'react-router-dom';
+import { fetchDashboardStats } from '../services/dataService';
 
 interface DashboardStats {
   members: number;
-  pmaMembers: number;
-  activeOrders: number;
+  farmers: number;
+  orders: number;
+  feedback: number;
+  reports: number;
+  activityLog: number;
 }
 
 interface Order {
@@ -25,8 +29,11 @@ export function Dashboard() {
   const isSuperAdmin = user?.role === 'super_admin';
   const [stats, setStats] = useState<DashboardStats>({
     members: 0,
-    pmaMembers: 0,
-    activeOrders: 0
+    farmers: 0,
+    orders: 0,
+    feedback: 0,
+    reports: 0,
+    activityLog: 0
   });
   const [recentOrders, setRecentOrders] = useState<Order[]>([]);
   const [loading, setLoading] = useState(true);
@@ -87,62 +94,14 @@ export function Dashboard() {
 
   const fetchStats = async (): Promise<DashboardStats> => {
     try {
-      // For super admin, get global stats
-      if (isSuperAdmin) {
-        // Count total members
-        const { count: membersCount } = await supabase
-          .from('users')
-          .select('*', { count: 'exact', head: true });
-
-        // Count PMA members (users who have seller profiles)
-        const { count: pmaCount } = await supabase
-          .from('seller_profiles')
-          .select('*', { count: 'exact', head: true });
-
-        // Count active orders (interests)
-        const { count: ordersCount } = await supabase
-          .from('interests')
-          .select('*', { count: 'exact', head: true })
-          .in('status', ['pending', 'in_discussion']);
-
-        return {
-          members: membersCount || 0,
-          pmaMembers: pmaCount || 0,
-          activeOrders: ordersCount || 0
-        };
-      } else {
-        // For regional admin, get region-specific stats
-        // Since we don't have region filtering in the current schema,
-        // we'll get global stats for now
-
-        // Count regional members
-        const { count: membersCount } = await supabase
-          .from('users')
-          .select('*', { count: 'exact', head: true });
-
-        // Count regional PMA members (users who have seller profiles)
-        const { count: pmaCount } = await supabase
-          .from('seller_profiles')
-          .select('*', { count: 'exact', head: true });
-
-        // Count regional active orders (interests)
-        const { count: ordersCount } = await supabase
-          .from('interests')
-          .select('*', { count: 'exact', head: true })
-          .in('status', ['pending', 'in_discussion']);
-
-        return {
-          members: membersCount || 0,
-          pmaMembers: pmaCount || 0,
-          activeOrders: ordersCount || 0
-        };
-      }
+      // Use the centralized data service
+      return await fetchDashboardStats();
     } catch (error) {
       console.error('Error fetching stats:', error);
       // Return fallback data if there's an error
       return isSuperAdmin
-        ? { members: 8976, pmaMembers: 1245, activeOrders: 367 }
-        : { members: 1856, pmaMembers: 234, activeOrders: 86 };
+        ? { members: 8976, farmers: 1245, orders: 367, feedback: 89, reports: 12, activityLog: 156 }
+        : { members: 1856, farmers: 234, orders: 86, feedback: 23, reports: 3, activityLog: 45 };
     }
   };
 
@@ -275,24 +234,48 @@ export function Dashboard() {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4">
         <StatCard
           title="Total Members"
           value={stats.members}
           icon={Users}
           description="Registered members"
+          to={`${basePath}/members`}
         />
-        {/* <StatCard
-          title="PMA Members"
-          value={stats.pmaMembers}
-          icon={Store}
-          description="Active PMA members"
-        /> */}
         <StatCard
-          title="Active Requests"
-          value={stats.activeOrders}
+          title="Farmers (Sellers)"
+          value={stats.farmers}
+          icon={Store}
+          description="Active farmers"
+          to={`${basePath}/farmers`}
+        />
+        <StatCard
+          title="Orders"
+          value={stats.orders}
           icon={ShoppingBag}
-          description="Requests in progress"
+          description="Total orders"
+          to={`${basePath}/orders`}
+        />
+        <StatCard
+          title="Feedback"
+          value={stats.feedback}
+          icon={MessageSquare}
+          description="Customer feedback"
+          to={`${basePath}/feedback`}
+        />
+        <StatCard
+          title="Reports"
+          value={stats.reports}
+          icon={FileText}
+          description="Generated reports"
+          to={`${basePath}/reports`}
+        />
+        <StatCard
+          title="Activity Log"
+          value={stats.activityLog}
+          icon={Activity}
+          description="System activities"
+          to={`${basePath}/activity-logs`}
         />
       </div>
 
