@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { fetchAllSellers, fetchFarmerRevenueData, fetchLocationStats, fetchActivityLogs } from '../services/dataService';
+import { fetchAllSellers, fetchFarmerRevenueData, fetchLocationStats, fetchActivityLogs, fetchAllFeedback } from '../services/dataService';
 
 export function DebugDataService() {
   const [results, setResults] = useState<any>({});
@@ -71,6 +71,14 @@ export function DebugDataService() {
           className="p-4 bg-orange-600 text-white rounded hover:bg-orange-700 disabled:opacity-50"
         >
           Test fetchActivityLogs
+        </button>
+
+        <button
+          onClick={() => testFunction('fetchAllFeedback', fetchAllFeedback)}
+          disabled={!!loading}
+          className="p-4 bg-red-600 text-white rounded hover:bg-red-700 disabled:opacity-50"
+        >
+          Test fetchAllFeedback
         </button>
       </div>
 

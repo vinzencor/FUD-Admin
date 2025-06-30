@@ -354,6 +354,152 @@ export interface ActivityLogData {
   status?: string;
 }
 
+export interface FeedbackData {
+  id: string;
+  type: 'feedback' | 'review';
+  user_id?: string;
+  user_name: string;
+  subject: string;
+  message: string;
+  status?: string;
+  region?: string;
+  created_at: string;
+  updated_at?: string;
+  response?: string;
+  response_date?: string;
+  responded_by?: string;
+  rating?: number;
+  review_type?: string;
+  listing_name?: string;
+  seller_name?: string;
+}
+
+/**
+ * Fetch all feedback and reviews
+ */
+export async function fetchAllFeedback(): Promise<FeedbackData[]> {
+  try {
+    const feedbackItems: FeedbackData[] = [];
+
+    // Get feedback from feedback table
+    const { data: feedbackData, error: feedbackError } = await supabase
+      .from('feedback')
+      .select('*')
+      .order('created_at', { ascending: false });
+
+    if (feedbackError) throw feedbackError;
+
+    // Transform feedback data
+    (feedbackData || []).forEach(feedback => {
+      feedbackItems.push({
+        id: feedback.id,
+        type: 'feedback', // Always set as 'feedback' for items from feedback table
+        user_id: feedback.user_id,
+        user_name: feedback.user_name || 'Unknown User',
+        subject: feedback.subject,
+        message: feedback.message,
+        status: feedback.status || 'new',
+        region: feedback.region,
+        created_at: feedback.created_at,
+        updated_at: feedback.updated_at,
+        response: feedback.response,
+        response_date: feedback.response_date,
+        responded_by: feedback.responded_by
+      });
+    });
+
+    // Get reviews from reviews table
+    const { data: reviewsData, error: reviewsError } = await supabase
+      .from('reviews')
+      .select('*')
+      .order('created_at', { ascending: false });
+
+    if (reviewsError) throw reviewsError;
+
+    if (reviewsData && reviewsData.length > 0) {
+      // Get user data for reviews
+      const reviewUserIds = [...new Set(reviewsData.map(r => r.user_id))];
+      const { data: reviewUsers } = await supabase
+        .from('users')
+        .select('id, full_name')
+        .in('id', reviewUserIds);
+
+      // Get listing data for product reviews
+      const listingIds = reviewsData.filter(r => r.listing_id).map(r => r.listing_id);
+      const { data: listings } = listingIds.length > 0 ? await supabase
+        .from('listings')
+        .select('id, name, seller_name')
+        .in('id', listingIds) : { data: [] };
+
+      // Get seller data for seller reviews
+      const sellerIds = reviewsData.filter(r => r.seller_id).map(r => r.seller_id);
+      const { data: sellers } = sellerIds.length > 0 ? await supabase
+        .from('seller_profiles')
+        .select('user_id, store_name')
+        .in('user_id', sellerIds) : { data: [] };
+
+      // Create lookup maps
+      const userMap = new Map();
+      (reviewUsers || []).forEach(user => {
+        userMap.set(user.id, user);
+      });
+
+      const listingMap = new Map();
+      (listings || []).forEach(listing => {
+        listingMap.set(listing.id, listing);
+      });
+
+      const sellerMap = new Map();
+      (sellers || []).forEach(seller => {
+        sellerMap.set(seller.user_id, seller);
+      });
+
+      // Transform reviews data
+      reviewsData.forEach(review => {
+        const user = userMap.get(review.user_id);
+        const listing = review.listing_id ? listingMap.get(review.listing_id) : null;
+        const seller = review.seller_id ? sellerMap.get(review.seller_id) : null;
+
+        let subject = '';
+        let sellerName = '';
+
+        if (review.review_type === 'product' && listing) {
+          subject = `Product Review: ${listing.name}`;
+          sellerName = listing.seller_name;
+        } else if (review.review_type === 'seller' && seller) {
+          subject = `Seller Review: ${seller.store_name}`;
+          sellerName = seller.store_name;
+        } else {
+          subject = `${review.review_type} Review`;
+        }
+
+        feedbackItems.push({
+          id: review.id,
+          type: 'review',
+          user_id: review.user_id,
+          user_name: user?.full_name || 'Unknown User',
+          subject: subject,
+          message: review.comment || '',
+          status: 'resolved', // Reviews are considered resolved
+          created_at: review.created_at,
+          updated_at: review.updated_at,
+          rating: review.rating,
+          review_type: review.review_type,
+          listing_name: listing?.name,
+          seller_name: sellerName
+        });
+      });
+    }
+
+    // Sort all feedback by creation date (most recent first)
+    return feedbackItems.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+
+  } catch (error) {
+    console.error('Error fetching feedback:', error);
+    throw error;
+  }
+}
+
 /**
  * Generate activity logs from database activities
  */
@@ -482,8 +628,8 @@ export async function fetchActivityLogs(): Promise<ActivityLogData[]> {
 
     // Get recent product reviews (simplified)
     const { data: recentReviews } = await supabase
-      .from('product_reviews')
-      .select('id, rating, created_at, user_id, listing_id')
+      .from('reviews')
+      .select('id, rating, created_at, user_id, listing_id, review_type')
       .order('created_at', { ascending: false })
       .limit(20);
 
@@ -518,12 +664,12 @@ export async function fetchActivityLogs(): Promise<ActivityLogData[]> {
 
         activities.push({
           id: `review-${review.id}`,
-          action: 'Product Review',
-          details: `${user?.full_name || 'Unknown'} left a ${review.rating}-star review for ${listing?.name || 'Unknown Product'}`,
+          action: `${review.review_type} Review`,
+          details: `${user?.full_name || 'Unknown'} left a ${review.rating}-star ${review.review_type} review${listing ? ` for ${listing.name}` : ''}`,
           timestamp: review.created_at,
           user_name: user?.full_name,
           user_email: user?.email,
-          entity_type: 'product_review',
+          entity_type: 'review',
           entity_id: review.id
         });
       });
@@ -543,11 +689,12 @@ export async function fetchActivityLogs(): Promise<ActivityLogData[]> {
  */
 export async function fetchDashboardStats() {
   try {
-    const [usersCount, sellersCount, interestsCount, feedbackCount, activityLogs] = await Promise.all([
+    const [usersCount, sellersCount, interestsCount, feedbackCount, reviewsCount, activityLogs] = await Promise.all([
       supabase.from('users').select('*', { count: 'exact', head: true }),
       supabase.from('seller_profiles').select('*', { count: 'exact', head: true }),
       supabase.from('interests').select('*', { count: 'exact', head: true }),
-      supabase.from('product_reviews').select('*', { count: 'exact', head: true }),
+      supabase.from('feedback').select('*', { count: 'exact', head: true }),
+      supabase.from('reviews').select('*', { count: 'exact', head: true }),
       fetchActivityLogs()
     ]);
 
@@ -555,7 +702,7 @@ export async function fetchDashboardStats() {
       members: usersCount.count || 0,
       farmers: sellersCount.count || 0,
       orders: interestsCount.count || 0,
-      feedback: feedbackCount.count || 0,
+      feedback: (feedbackCount.count || 0) + (reviewsCount.count || 0), // Combined feedback and reviews
       reports: 0, // Placeholder - implement when reports table is created
       activityLog: activityLogs.length
     };
