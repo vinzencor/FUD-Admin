@@ -7,6 +7,11 @@ import { PMAMembers } from './pages/PMAMembers';
 import { Orders } from './pages/Orders';
 import { Interests } from './pages/Interests';
 import { Feedback } from './pages/Feedback';
+import { Farmers } from './pages/Farmers';
+import { Reports } from './pages/super-admin/Reports';
+import { ActivityLogs } from './pages/super-admin/ActivityLogs';
+import { SuperAdminSetup } from './pages/SuperAdminSetup';
+import { DebugDataService } from './pages/DebugDataService';
 import { Login } from './pages/Login';
 import { Settings } from './pages/Settings';
 import { useAuthStore } from './store/authStore';
@@ -40,6 +45,8 @@ function App() {
     <Router>
       <Routes>
         <Route path="/login" element={<Login />} />
+        <Route path="/setup-super-admin" element={<SuperAdminSetup />} />
+        <Route path="/debug-data-service" element={<DebugDataService />} />
 
         <Route
           path="/"
@@ -69,10 +76,13 @@ function App() {
           <Route index element={<Navigate to="/super-admin/dashboard" replace />} />
           <Route path="dashboard" element={<Dashboard />} />
           <Route path="members" element={<Members />} />
+          <Route path="farmers" element={<Farmers />} />
           {/* <Route path="pma-members" element={<PMAMembers />} /> */}
           <Route path="orders" element={<Orders />} />
           <Route path="interests" element={<Interests />} />
           <Route path="feedback" element={<Feedback />} />
+          <Route path="reports" element={<Reports />} />
+          <Route path="activity-logs" element={<ActivityLogs />} />
           <Route path="settings" element={<Settings />} />
         </Route>
 
@@ -88,10 +98,13 @@ function App() {
           <Route index element={<Navigate to="/admin/dashboard" replace />} />
           <Route path="dashboard" element={<Dashboard />} />
           <Route path="members" element={<Members />} />
+          <Route path="farmers" element={<Farmers />} />
           {/* <Route path="pma-members" element={<PMAMembers />} /> */}
           <Route path="orders" element={<Orders />} />
           <Route path="interests" element={<Interests />} />
           <Route path="feedback" element={<Feedback />} />
+          <Route path="reports" element={<Reports />} />
+          <Route path="activity-logs" element={<ActivityLogs />} />
           <Route path="settings" element={<Settings />} />
         </Route>
 

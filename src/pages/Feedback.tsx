@@ -2,66 +2,30 @@ import React, { useState, useEffect } from 'react';
 import { MessageSquare, User, Store, Search, Filter, Loader2, RefreshCw, Download, Star, Trash2, AlertTriangle } from 'lucide-react';
 import { useAuthStore } from '../store/authStore';
 import { supabase } from '../supabaseClient';
+// import { fetchAllFeedback } from '../services/dataService'; // Using direct queries for now
+import { exportWithLoading, generateFilename, formatDateForExport, ExportColumn } from '../utils/exportUtils';
 
 interface Feedback {
   id: string;
-  type: 'customer' | 'farmer' | 'review';
+  type: 'feedback' | 'review';
   userName: string;
   subject: string;
   message: string;
-  status: 'new' | 'in_progress' | 'resolved';
+  status: string;
   date: string;
-  region: string;
+  region?: string;
   response?: string;
   responseDate?: string;
   rating?: number;
-  reviewType?: 'product' | 'seller' | 'service';
+  reviewType?: string;
   productName?: string;
   sellerName?: string;
+  user_id?: string;
+  created_at: string;
+  user_name: string;
 }
 
-const mockFeedback: Feedback[] = [
-  {
-    id: '1',
-    type: 'customer',
-    userName: 'John Doe',
-    subject: 'Delivery Issue',
-    message: 'My order was delayed by 2 days without any notification.',
-    status: 'new',
-    date: '2024-03-10',
-    region: 'California'
-  },
-  {
-    id: '2',
-    type: 'farmer',
-    userName: 'Green Valley Farm',
-    subject: 'Technical Problem',
-    message: 'Unable to update product prices in the system.',
-    status: 'in_progress',
-    date: '2024-03-09',
-    region: 'Texas'
-  },
-  {
-    id: '3',
-    type: 'customer',
-    userName: 'Sarah Smith',
-    subject: 'Product Quality',
-    message: 'Received damaged fruits in my last order.',
-    status: 'resolved',
-    date: '2024-03-08',
-    region: 'California'
-  },
-  {
-    id: '4',
-    type: 'farmer',
-    userName: 'Fresh Fields',
-    subject: 'Account Access',
-    message: 'Need help resetting my password.',
-    status: 'new',
-    date: '2024-03-11',
-    region: 'Florida'
-  }
-];
+// Mock data removed - now using real data from database
 
 export function Feedback() {
   const user = useAuthStore((state) => state.user);
@@ -94,6 +58,8 @@ export function Feedback() {
     feedbackType: ''
   });
   const [isDeleting, setIsDeleting] = useState(false);
+  const [exporting, setExporting] = useState(false);
+  const [exportMessage, setExportMessage] = useState<string | null>(null);
 
   // Fetch feedback data from database
   const fetchFeedback = async () => {
@@ -101,129 +67,72 @@ export function Feedback() {
       setLoading(true);
       setError(null);
 
-      const allFeedback: Feedback[] = [];
+      console.log('Starting to fetch feedback...');
 
-      // Fetch from feedback table
+      // Test direct Supabase queries first
       const { data: feedbackData, error: feedbackError } = await supabase
         .from('feedback')
-        .select(`
-          id,
-          type,
-          user_name,
-          subject,
-          message,
-          status,
-          created_at,
-          region,
-          user_id,
-          response,
-          response_date,
-          users!user_id(
-            full_name,
-            email
-          )
-        `)
+        .select('*')
         .order('created_at', { ascending: false });
 
-      if (!feedbackError && feedbackData) {
-        const transformedFeedback: Feedback[] = feedbackData.map((item: any) => ({
-          id: item.id,
-          type: item.type,
-          userName: item.user_name || item.users?.full_name || item.users?.email || 'Unknown User',
-          subject: item.subject,
-          message: item.message,
-          status: item.status,
-          date: new Date(item.created_at).toISOString().split('T')[0],
-          region: item.region || 'Unknown',
-          response: item.response,
-          responseDate: item.response_date ? new Date(item.response_date).toISOString().split('T')[0] : undefined
-        }));
-        allFeedback.push(...transformedFeedback);
-      }
+      console.log('Direct feedback query result:', { feedbackData, feedbackError });
 
-      // Fetch from reviews table
       const { data: reviewsData, error: reviewsError } = await supabase
         .from('reviews')
-        .select(`
-          id,
-          user_id,
-          listing_id,
-          seller_id,
-          review_type,
-          rating,
-          comment,
-          created_at,
-          users!user_id(
-            full_name,
-            email,
-            city,
-            state
-          ),
-          listings!listing_id(
-            name,
-            seller_name
-          ),
-          seller:users!seller_id(
-            full_name,
-            email
-          )
-        `)
+        .select('*')
         .order('created_at', { ascending: false });
 
-      if (!reviewsError && reviewsData) {
-        const transformedReviews: Feedback[] = reviewsData.map((item: any) => {
-          const userName = item.users?.full_name || item.users?.email || 'Unknown User';
-          const region = item.users?.state || item.users?.city || 'Unknown';
+      console.log('Direct reviews query result:', { reviewsData, reviewsError });
 
-          let subject = '';
-          let productName = '';
-          let sellerName = '';
+      const allFeedback: Feedback[] = [];
 
-          if (item.review_type === 'product' && item.listings) {
-            subject = `Product Review: ${item.listings.name}`;
-            productName = item.listings.name;
-            sellerName = item.listings.seller_name;
-          } else if (item.review_type === 'seller' && item.seller) {
-            subject = `Seller Review: ${item.seller.full_name || item.seller.email}`;
-            sellerName = item.seller.full_name || item.seller.email;
-          } else if (item.review_type === 'service') {
-            subject = 'Service Review';
-          } else {
-            subject = `${item.review_type} Review`;
-          }
-
-          return {
+      // Transform feedback data
+      if (feedbackData && !feedbackError) {
+        feedbackData.forEach(item => {
+          allFeedback.push({
             id: item.id,
-            type: 'review' as const,
-            userName,
-            subject,
+            type: 'feedback',
+            userName: item.user_name || 'Unknown User',
+            subject: item.subject,
+            message: item.message,
+            status: item.status || 'new',
+            date: new Date(item.created_at).toLocaleDateString(),
+            region: item.region,
+            response: item.response,
+            responseDate: item.response_date,
+            user_id: item.user_id,
+            created_at: item.created_at,
+            user_name: item.user_name
+          });
+        });
+      }
+
+      // Transform reviews data
+      if (reviewsData && !reviewsError) {
+        reviewsData.forEach(item => {
+          allFeedback.push({
+            id: item.id,
+            type: 'review',
+            userName: 'Review User', // Simplified for now
+            subject: `${item.review_type} Review`,
             message: item.comment || `${item.rating}/5 star rating`,
-            status: 'new' as const, // Reviews start as new
-            date: new Date(item.created_at).toISOString().split('T')[0],
-            region,
+            status: 'new',
+            date: new Date(item.created_at).toLocaleDateString(),
             rating: item.rating,
             reviewType: item.review_type,
-            productName,
-            sellerName
-          };
+            user_id: item.user_id,
+            created_at: item.created_at,
+            user_name: 'Review User'
+          });
         });
-        allFeedback.push(...transformedReviews);
       }
 
-      // Sort all feedback by date (newest first)
-      allFeedback.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-
-      if (allFeedback.length === 0) {
-        // No data found, use mock data
-        setFeedbacks(mockFeedback);
-      } else {
-        setFeedbacks(allFeedback);
-      }
+      console.log('All feedback combined:', allFeedback);
+      setFeedbacks(allFeedback);
     } catch (err) {
       console.error('Error fetching feedback:', err);
       setError('Failed to load feedback data');
-      // Fall back to mock data on error
-      setFeedbacks(mockFeedback);
+      setFeedbacks([]); // Set empty array instead of mock data
     } finally {
       setLoading(false);
     }
@@ -376,37 +285,40 @@ export function Feedback() {
   };
 
   // Export feedback to CSV
-  const exportToCSV = () => {
-    const headers = ['ID', 'Type', 'User Name', 'Subject', 'Message', 'Status', 'Date', 'Region', 'Rating', 'Review Type', 'Product', 'Seller', 'Response', 'Response Date'];
-    const csvContent = [
-      headers.join(','),
-      ...filteredFeedback.map(feedback => [
-        feedback.id,
-        feedback.type,
-        `"${feedback.userName}"`,
-        `"${feedback.subject}"`,
-        `"${feedback.message.replace(/"/g, '""')}"`,
-        feedback.status,
-        feedback.date,
-        feedback.region,
-        feedback.rating || '',
-        feedback.reviewType || '',
-        feedback.productName ? `"${feedback.productName}"` : '',
-        feedback.sellerName ? `"${feedback.sellerName}"` : '',
-        feedback.response ? `"${feedback.response.replace(/"/g, '""')}"` : '',
-        feedback.responseDate || ''
-      ].join(','))
-    ].join('\n');
+  const handleExportFeedback = async () => {
+    const filename = generateFilename('feedback');
 
-    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-    const link = document.createElement('a');
-    const url = URL.createObjectURL(blob);
-    link.setAttribute('href', url);
-    link.setAttribute('download', `feedback-export-${new Date().toISOString().split('T')[0]}.csv`);
-    link.style.visibility = 'hidden';
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
+    const exportColumns: ExportColumn[] = [
+      { key: 'id', label: 'ID' },
+      { key: 'type', label: 'Type' },
+      { key: 'userName', label: 'User Name' },
+      { key: 'subject', label: 'Subject' },
+      { key: 'message', label: 'Message' },
+      { key: 'status', label: 'Status' },
+      { key: 'date', label: 'Date' },
+      { key: 'region', label: 'Region' },
+      { key: 'rating', label: 'Rating' },
+      { key: 'reviewType', label: 'Review Type' },
+      { key: 'productName', label: 'Product' },
+      { key: 'sellerName', label: 'Seller' },
+      { key: 'response', label: 'Response' },
+      { key: 'responseDate', label: 'Response Date' }
+    ];
+
+    await exportWithLoading(
+      () => Promise.resolve(filteredFeedback),
+      exportColumns,
+      filename,
+      setExporting,
+      (count) => {
+        setExportMessage(`Successfully exported ${count} feedback items`);
+        setTimeout(() => setExportMessage(null), 3000);
+      },
+      (error) => {
+        setExportMessage(`Export failed: ${error}`);
+        setTimeout(() => setExportMessage(null), 5000);
+      }
+    );
   };
 
   useEffect(() => {
@@ -505,12 +417,12 @@ export function Feedback() {
   return (
     <div className="space-y-6">
       <div className="flex justify-between items-center">
-        <div>
+        {/* <div>
           <h2 className="text-2xl font-semibold text-gray-900">Feedback Management</h2>
           <p className="text-sm text-gray-600 mt-1">
             Showing {filteredFeedback.length} of {feedbacks.length} feedback items
           </p>
-        </div>
+        </div> */}
         <div className="flex gap-2">
           <button
             onClick={fetchFeedback}
@@ -520,14 +432,14 @@ export function Feedback() {
             <RefreshCw className={`h-4 w-4 mr-2 ${loading ? 'animate-spin' : ''}`} />
             Refresh
           </button>
-          {/* <button
-            onClick={exportToCSV}
-            disabled={filteredFeedback.length === 0}
+          <button
+            onClick={handleExportFeedback}
+            disabled={filteredFeedback.length === 0 || exporting}
             className="inline-flex items-center px-3 py-2 border border-gray-300 shadow-sm text-sm leading-4 font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 disabled:opacity-50"
           >
-            <Download className="h-4 w-4 mr-2" />
-            Export CSV
-          </button> */}
+            <Download className={`h-4 w-4 mr-2 ${exporting ? 'animate-spin' : ''}`} />
+            {exporting ? 'Exporting...' : 'Export CSV'}
+          </button>
           <select
             value={selectedType}
             onChange={(e) => setSelectedType(e.target.value)}
@@ -550,7 +462,7 @@ export function Feedback() {
               <option value="service">Service Reviews</option>
             </select>
           )}
-          <select
+          {/* <select
             value={selectedStatus}
             onChange={(e) => setSelectedStatus(e.target.value)}
             className="border border-gray-300 rounded-lg px-3 py-2"
@@ -559,13 +471,24 @@ export function Feedback() {
             <option value="new">New</option>
             <option value="in_progress">In Progress</option>
             <option value="resolved">Resolved</option>
-          </select>
+          </select> */}
         </div>
       </div>
 
+      {/* Export Message */}
+      {exportMessage && (
+        <div className={`p-4 rounded-lg ${
+          exportMessage.includes('failed') || exportMessage.includes('Error')
+            ? 'bg-red-50 border border-red-200 text-red-700'
+            : 'bg-green-50 border border-green-200 text-green-700'
+        }`}>
+          {exportMessage}
+        </div>
+      )}
+
       {/* Feedback Statistics */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-        <div className="bg-blue-50 p-4 rounded-lg">
+        {/* <div className="bg-blue-50 p-4 rounded-lg">
           <div className="flex items-center">
             <div className="flex-shrink-0">
               <div className="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center">
@@ -579,9 +502,9 @@ export function Feedback() {
               <p className="text-xs text-blue-600">Pending review</p>
             </div>
           </div>
-        </div>
+        </div> */}
 
-        <div className="bg-yellow-50 p-4 rounded-lg">
+        {/* <div className="bg-yellow-50 p-4 rounded-lg">
           <div className="flex items-center">
             <div className="flex-shrink-0">
               <div className="w-8 h-8 bg-yellow-100 rounded-full flex items-center justify-center">
@@ -611,7 +534,7 @@ export function Feedback() {
               <p className="text-xs text-green-600">Completed</p>
             </div>
           </div>
-        </div>
+        </div> */}
 
         <div className="bg-gray-50 p-4 rounded-lg">
           <div className="flex items-center">
@@ -670,10 +593,10 @@ export function Feedback() {
           <div key={feedback.id} className="bg-white rounded-lg shadow-md p-6">
             <div className="flex items-start justify-between">
               <div className="flex items-start space-x-4">
-                {feedback.type === 'customer' ? (
+                {feedback.type === 'feedback' ? (
                   <User className="h-10 w-10 text-gray-400 bg-gray-100 rounded-full p-2" />
-                ) : feedback.type === 'farmer' ? (
-                  <Store className="h-10 w-10 text-gray-400 bg-gray-100 rounded-full p-2" />
+                ) : feedback.type === 'review' ? (
+                  <Star className="h-10 w-10 text-gray-400 bg-gray-100 rounded-full p-2" />
                 ) : (
                   <MessageSquare className="h-10 w-10 text-gray-400 bg-gray-100 rounded-full p-2" />
                 )}
