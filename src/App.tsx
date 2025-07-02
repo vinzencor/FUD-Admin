@@ -12,6 +12,7 @@ import { Reports } from './pages/super-admin/Reports';
 import { ActivityLogs } from './pages/super-admin/ActivityLogs';
 import { SuperAdminSetup } from './pages/SuperAdminSetup';
 import { DebugDataService } from './pages/DebugDataService';
+import { HomePage } from './pages/HomePage';
 import { Login } from './pages/Login';
 import { Settings } from './pages/Settings';
 import { useAuthStore } from './store/authStore';
@@ -74,6 +75,7 @@ function App() {
           }
         >
           <Route index element={<Navigate to="/super-admin/dashboard" replace />} />
+          <Route path="home" element={<HomePage />} />
           <Route path="dashboard" element={<Dashboard />} />
           <Route path="members" element={<Members />} />
           <Route path="farmers" element={<Farmers />} />
@@ -96,6 +98,7 @@ function App() {
           }
         >
           <Route index element={<Navigate to="/admin/dashboard" replace />} />
+          <Route path="home" element={<HomePage />} />
           <Route path="dashboard" element={<Dashboard />} />
           <Route path="members" element={<Members />} />
           <Route path="farmers" element={<Farmers />} />

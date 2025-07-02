@@ -14,6 +14,8 @@ import { useAuthStore } from '../store/authStore';
 import { supabase } from '../supabaseClient';
 import { updateUserRole, roleLabels, roleDescriptions } from '../utils/roleManagement';
 import { exportWithLoading, generateFilename, formatDateForExport, formatBooleanForExport, EXPORT_COLUMNS } from '../utils/exportUtils';
+import { AdminLocationModal } from '../components/admin/AdminLocationModal';
+import { getAdminAssignedLocation, formatLocationDisplay, AdminLocation } from '../services/locationAdminService';
 
 interface Member {
   id: string;
@@ -57,29 +59,66 @@ export function Members() {
   const [selectedRole, setSelectedRole] = useState<'user' | 'admin' | 'super_admin'>('user');
   const [exporting, setExporting] = useState(false);
   const [exportMessage, setExportMessage] = useState<string | null>(null);
+  const [showAdminLocationModal, setShowAdminLocationModal] = useState(false);
+  const [adminLocationModalMode, setAdminLocationModalMode] = useState<'promote' | 'edit'>('promote');
+  const [selectedMemberForAdmin, setSelectedMemberForAdmin] = useState<Member | null>(null);
 
 
   useEffect(() => {
     const fetchMembers = async () => {
       try {
+        // Get admin's assigned location for filtering
+        let adminLocation: AdminLocation | null = null;
+        if (user?.role === 'admin' && user?.id) {
+          adminLocation = await getAdminAssignedLocation(user.id);
+        }
+
         // First, try to get users from the database including role
         let usersData: any[] = [];
         let usersError: any = null;
 
         try {
-          const result = await supabase
+          let userQuery = supabase
             .from('users')
-            .select('id, full_name, email, mobile_phone, country, state, city, created_at, default_mode, role');
+            .select('id, full_name, email, mobile_phone, country, state, city, created_at, default_mode, role, admin_assigned_location');
 
+          // Apply location filter for regional admins
+          if (adminLocation) {
+            if (adminLocation.country) {
+              userQuery = userQuery.ilike('country', `%${adminLocation.country}%`);
+            }
+            if (adminLocation.state) {
+              userQuery = userQuery.ilike('state', `%${adminLocation.state}%`);
+            }
+            if (adminLocation.city) {
+              userQuery = userQuery.ilike('city', `%${adminLocation.city}%`);
+            }
+          }
+
+          const result = await userQuery;
           usersData = result.data || [];
           usersError = result.error;
         } catch (err) {
           // If role column doesn't exist, try without it
           console.log('Role column might not exist, trying without it...');
-          const result = await supabase
+          let fallbackQuery = supabase
             .from('users')
             .select('id, full_name, email, mobile_phone, country, state, city, created_at, default_mode');
 
+          // Apply location filter for regional admins even in fallback
+          if (adminLocation) {
+            if (adminLocation.country) {
+              fallbackQuery = fallbackQuery.ilike('country', `%${adminLocation.country}%`);
+            }
+            if (adminLocation.state) {
+              fallbackQuery = fallbackQuery.ilike('state', `%${adminLocation.state}%`);
+            }
+            if (adminLocation.city) {
+              fallbackQuery = fallbackQuery.ilike('city', `%${adminLocation.city}%`);
+            }
+          }
+
+          const result = await fallbackQuery;
           usersData = result.data || [];
           usersError = result.error;
         }
@@ -234,6 +273,23 @@ export function Members() {
       setMembers(members.filter((m) => m.id !== memberId));
       alert('Member deleted successfully.');
     }
+  };
+
+  const handlePromoteToAdmin = (member: Member) => {
+    setSelectedMemberForAdmin(member);
+    setAdminLocationModalMode('promote');
+    setShowAdminLocationModal(true);
+  };
+
+  const handleEditAdminLocation = (member: Member) => {
+    setSelectedMemberForAdmin(member);
+    setAdminLocationModalMode('edit');
+    setShowAdminLocationModal(true);
+  };
+
+  const handleAdminLocationSuccess = () => {
+    // Refresh the members list
+    window.location.reload();
   };
   const handleSaveEdits = async (updatedMember: Member) => {
     // Only super admin can edit members
@@ -622,6 +678,30 @@ export function Members() {
                       Edit
                     </Button>
 
+                    {member.role === 'user' && (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => handlePromoteToAdmin(member)}
+                        className="flex items-center gap-1 text-purple-600 hover:text-purple-700 text-xs"
+                      >
+                        <Crown className="h-3 w-3" />
+                        Promote to Admin
+                      </Button>
+                    )}
+
+                    {member.role === 'admin' && (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => handleEditAdminLocation(member)}
+                        className="flex items-center gap-1 text-blue-600 hover:text-blue-700 text-xs"
+                      >
+                        <Crown className="h-3 w-3" />
+                        Edit Location
+                      </Button>
+                    )}
+
                     <Button
                       variant="outline"
                       size="sm"
@@ -793,6 +873,30 @@ export function Members() {
                             <Edit className="h-3 w-3" />
                             Edit
                           </Button>
+
+                          {member.role === 'user' && (
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => handlePromoteToAdmin(member)}
+                              className="flex items-center gap-1 text-purple-600 hover:text-purple-700"
+                            >
+                              <Crown className="h-3 w-3" />
+                              Promote to Admin
+                            </Button>
+                          )}
+
+                          {member.role === 'admin' && (
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => handleEditAdminLocation(member)}
+                              className="flex items-center gap-1 text-blue-600 hover:text-blue-700"
+                            >
+                              <Crown className="h-3 w-3" />
+                              Edit Location
+                            </Button>
+                          )}
 
                           <Button
                             variant="outline"
@@ -1140,6 +1244,25 @@ export function Members() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Admin Location Modal */}
+      {selectedMemberForAdmin && (
+        <AdminLocationModal
+          isOpen={showAdminLocationModal}
+          onClose={() => {
+            setShowAdminLocationModal(false);
+            setSelectedMemberForAdmin(null);
+          }}
+          onSuccess={handleAdminLocationSuccess}
+          user={{
+            id: selectedMemberForAdmin.id,
+            name: selectedMemberForAdmin.name,
+            email: selectedMemberForAdmin.email,
+            role: selectedMemberForAdmin.role,
+          }}
+          mode={adminLocationModalMode}
+        />
+      )}
     </div>
   );
 }

@@ -2,6 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { Search, Filter, CheckCircle, XCircle, AlertCircle, Download, RefreshCw } from 'lucide-react';
 import { fetchAllSellers, SellerData } from '../services/dataService';
 import { exportWithLoading, generateFilename, formatDateForExport, formatArrayForExport, EXPORT_COLUMNS } from '../utils/exportUtils';
+import { useAuthStore } from '../store/authStore';
+import { getAdminAssignedLocation, AdminLocation } from '../services/locationAdminService';
 
 interface Farmer {
   id: string;
@@ -19,6 +21,7 @@ interface Farmer {
 }
 
 export function Farmers() {
+  const user = useAuthStore((state) => state.user);
   const [showEditModal, setShowEditModal] = useState(false);
   const [selectedFarmer, setSelectedFarmer] = useState<Farmer | null>(null);
   const [farmers, setFarmers] = useState<Farmer[]>([]);
@@ -37,7 +40,13 @@ export function Farmers() {
       setLoading(true);
       setError(null);
 
-      const sellersData = await fetchAllSellers();
+      // Get admin's assigned location for filtering
+      let adminLocation: AdminLocation | null = null;
+      if (user?.role === 'admin' && user?.id) {
+        adminLocation = await getAdminAssignedLocation(user.id);
+      }
+
+      const sellersData = await fetchAllSellers(adminLocation);
 
       // Transform seller data to farmer format
       const farmersData: Farmer[] = sellersData.map(seller => ({
