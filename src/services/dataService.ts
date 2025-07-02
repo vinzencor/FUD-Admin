@@ -1,4 +1,5 @@
 import { supabase } from '../supabaseClient';
+import { AdminLocation, getLocationFilteredUserIds, hasLocationRestrictions } from './locationAdminService';
 
 /**
  * Data fetching services for admin panel
@@ -94,8 +95,9 @@ export async function fetchAllUsers(): Promise<UserData[]> {
 
 /**
  * Fetch all seller profiles with user data
+ * @param adminLocation - Optional location filter for regional admins
  */
-export async function fetchAllSellers(): Promise<SellerData[]> {
+export async function fetchAllSellers(adminLocation?: AdminLocation | null): Promise<SellerData[]> {
   try {
     // First get seller profiles
     const { data: sellerProfiles, error: sellerError } = await supabase
@@ -111,11 +113,26 @@ export async function fetchAllSellers(): Promise<SellerData[]> {
     // Get user IDs
     const userIds = sellerProfiles.map(sp => sp.user_id);
 
-    // Get user data
-    const { data: users, error: userError } = await supabase
+    // Build user query with location filter if provided
+    let userQuery = supabase
       .from('users')
       .select('id, full_name, email, mobile_phone, city, state, country, created_at')
       .in('id', userIds);
+
+    // Apply location filter for regional admins
+    if (adminLocation) {
+      if (adminLocation.country) {
+        userQuery = userQuery.ilike('country', `%${adminLocation.country}%`);
+      }
+      if (adminLocation.state) {
+        userQuery = userQuery.ilike('state', `%${adminLocation.state}%`);
+      }
+      if (adminLocation.city) {
+        userQuery = userQuery.ilike('city', `%${adminLocation.city}%`);
+      }
+    }
+
+    const { data: users, error: userError } = await userQuery;
 
     if (userError) throw userError;
 

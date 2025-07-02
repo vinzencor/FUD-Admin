@@ -12,6 +12,7 @@ import {
   Store,
   FileText,
   Activity,
+  Home,
 } from 'lucide-react';
 import { cn } from '../../lib/utils';
 import { useAuthStore } from '../../store/authStore';
@@ -24,6 +25,7 @@ export function Sidebar() {
   const basePath = isSuperAdmin ? '/super-admin' : '/admin';
 
   const navigation = [
+    { name: 'Home', to: `${basePath}/home`, icon: Home },
     { name: 'Dashboard', to: `${basePath}/dashboard`, icon: LayoutDashboard },
     { name: 'Members', to: `${basePath}/members`, icon: Users },
     { name: 'Farmers', to: `${basePath}/farmers`, icon: Store },

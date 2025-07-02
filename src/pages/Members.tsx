@@ -14,6 +14,8 @@ import { useAuthStore } from '../store/authStore';
 import { supabase } from '../supabaseClient';
 import { updateUserRole, roleLabels, roleDescriptions } from '../utils/roleManagement';
 import { exportWithLoading, generateFilename, formatDateForExport, formatBooleanForExport, EXPORT_COLUMNS } from '../utils/exportUtils';
+import { AdminLocationModal } from '../components/admin/AdminLocationModal';
+import { getAdminAssignedLocation, formatLocationDisplay, AdminLocation } from '../services/locationAdminService';
 
 interface Member {
   id: string;
@@ -57,29 +59,66 @@ export function Members() {
   const [selectedRole, setSelectedRole] = useState<'user' | 'admin' | 'super_admin'>('user');
   const [exporting, setExporting] = useState(false);
   const [exportMessage, setExportMessage] = useState<string | null>(null);
+  const [showAdminLocationModal, setShowAdminLocationModal] = useState(false);
+  const [adminLocationModalMode, setAdminLocationModalMode] = useState<'promote' | 'edit'>('promote');
+  const [selectedMemberForAdmin, setSelectedMemberForAdmin] = useState<Member | null>(null);
 
 
   useEffect(() => {
     const fetchMembers = async () => {
       try {
+        // Get admin's assigned location for filtering
+        let adminLocation: AdminLocation | null = null;
+        if (user?.role === 'admin' && user?.id) {
+          adminLocation = await getAdminAssignedLocation(user.id);
+        }
+
         // First, try to get users from the database including role
         let usersData: any[] = [];
         let usersError: any = null;
 
         try {
-          const result = await supabase
+          let userQuery = supabase
             .from('users')
-            .select('id, full_name, email, mobile_phone, country, state, city, created_at, default_mode, role');
+            .select('id, full_name, email, mobile_phone, country, state, city, created_at, default_mode, role, admin_assigned_location');
 
+          // Apply location filter for regional admins
+          if (adminLocation) {
+            if (adminLocation.country) {
+              userQuery = userQuery.ilike('country', `%${adminLocation.country}%`);
+            }
+            if (adminLocation.state) {
+              userQuery = userQuery.ilike('state', `%${adminLocation.state}%`);
+            }
+            if (adminLocation.city) {
+              userQuery = userQuery.ilike('city', `%${adminLocation.city}%`);
+            }
+          }
+
+          const result = await userQuery;
           usersData = result.data || [];
           usersError = result.error;
         } catch (err) {
           // If role column doesn't exist, try without it
           console.log('Role column might not exist, trying without it...');
-          const result = await supabase
+          let fallbackQuery = supabase
             .from('users')
             .select('id, full_name, email, mobile_phone, country, state, city, created_at, default_mode');
 
+          // Apply location filter for regional admins even in fallback
+          if (adminLocation) {
+            if (adminLocation.country) {
+              fallbackQuery = fallbackQuery.ilike('country', `%${adminLocation.country}%`);
+            }
+            if (adminLocation.state) {
+              fallbackQuery = fallbackQuery.ilike('state', `%${adminLocation.state}%`);
+            }
+            if (adminLocation.city) {
+              fallbackQuery = fallbackQuery.ilike('city', `%${adminLocation.city}%`);
+            }
+          }
+
+          const result = await fallbackQuery;
           usersData = result.data || [];
           usersError = result.error;
         }
@@ -234,6 +273,23 @@ export function Members() {
       setMembers(members.filter((m) => m.id !== memberId));
       alert('Member deleted successfully.');
     }
+  };
+
+  const handlePromoteToAdmin = (member: Member) => {
+    setSelectedMemberForAdmin(member);
+    setAdminLocationModalMode('promote');
+    setShowAdminLocationModal(true);
+  };
+
+  const handleEditAdminLocation = (member: Member) => {
+    setSelectedMemberForAdmin(member);
+    setAdminLocationModalMode('edit');
+    setShowAdminLocationModal(true);
+  };
+
+  const handleAdminLocationSuccess = () => {
+    // Refresh the members list
+    window.location.reload();
   };
   const handleSaveEdits = async (updatedMember: Member) => {
     // Only super admin can edit members
@@ -403,60 +459,65 @@ export function Members() {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center h-64">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary-600"></div>
-        <span className="ml-3 text-gray-600">Loading members...</span>
+      <div className="flex flex-col items-center justify-center h-64 px-4">
+        <div className="animate-spin rounded-full h-8 w-8 sm:h-12 sm:w-12 border-b-2 border-primary-600"></div>
+        <span className="mt-3 text-sm sm:text-base text-gray-600 text-center">Loading members...</span>
       </div>
     );
   }
 
   return (
-    <div className="space-y-6">
-      <div className="flex flex-col sm:flex-row justify-between items-center gap-4">
-        <div>
-          <div className="flex items-center gap-3">
-            <h2 className="text-2xl font-semibold text-gray-900">Members</h2>
+    <div className="space-y-4 lg:space-y-6">
+      <div className="flex flex-col gap-4">
+        <div className="flex flex-col sm:flex-row sm:justify-between sm:items-start gap-4">
+          <div className="flex-1">
+            <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-3">
+              <h2 className="text-xl lg:text-2xl font-semibold text-gray-900">Members</h2>
+              {user?.role === 'super_admin' && (
+                <span className="px-2 py-1 text-xs font-medium rounded-full bg-purple-100 text-purple-800 flex items-center gap-1 w-fit">
+                  <Crown className="h-3 w-3" />
+                  Super Admin
+                </span>
+              )}
+              {user?.role === 'admin' && (
+                <span className="px-2 py-1 text-xs font-medium rounded-full bg-blue-100 text-blue-800 flex items-center gap-1 w-fit">
+                  <AlertTriangle className="h-3 w-3" />
+                  Admin (View Only)
+                </span>
+              )}
+            </div>
+
+            <div className="grid grid-cols-2 sm:flex sm:flex-wrap gap-2 sm:gap-4 mt-2 text-xs sm:text-sm text-gray-600">
+              <span>Total: {members.length}</span>
+              <span>Buyers: {members.filter(m => !m.isSeller && m.defaultMode === 'buyer').length}</span>
+              <span>Sellers: {members.filter(m => m.isSeller).length}</span>
+              <span>Both: {members.filter(m => m.isSeller && m.defaultMode === 'both').length}</span>
+            </div>
+
             {user?.role === 'super_admin' && (
-              <span className="px-3 py-1 text-xs font-medium rounded-full bg-purple-100 text-purple-800 flex items-center gap-1">
-                <Crown className="h-3 w-3" />
-                Super Admin
-              </span>
+              <p className="text-xs sm:text-sm text-green-600 mt-2 flex items-start gap-1">
+                <CheckCircle className="h-3 w-3 sm:h-4 sm:w-4 mt-0.5 flex-shrink-0" />
+                <span>Full access: Edit, delete, and assign user roles</span>
+              </p>
             )}
             {user?.role === 'admin' && (
-              <span className="px-3 py-1 text-xs font-medium rounded-full bg-blue-100 text-blue-800 flex items-center gap-1">
-                <AlertTriangle className="h-3 w-3" />
-                Admin (View Only)
-              </span>
+              <p className="text-xs sm:text-sm text-orange-600 mt-2 flex items-start gap-1">
+                <AlertTriangle className="h-3 w-3 sm:h-4 sm:w-4 mt-0.5 flex-shrink-0" />
+                <span>Limited access: View members only - no editing, deleting, or role assignment</span>
+              </p>
             )}
           </div>
-          <div className="flex flex-wrap gap-4 mt-2 text-sm text-gray-600">
-            <span>Total: {members.length}</span>
-            <span>Buyers: {members.filter(m => !m.isSeller && m.defaultMode === 'buyer').length}</span>
-            <span>Sellers: {members.filter(m => m.isSeller).length}</span>
-            <span>Both: {members.filter(m => m.isSeller && m.defaultMode === 'both').length}</span>
+
+          <div className="flex justify-center sm:justify-end">
+            <button
+              onClick={handleExportMembers}
+              disabled={exporting || filteredMembers.length === 0}
+              className="flex items-center gap-2 px-3 sm:px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 disabled:opacity-50 disabled:cursor-not-allowed text-xs sm:text-sm w-full sm:w-auto justify-center"
+            >
+              <Download className={`h-3 w-3 sm:h-4 sm:w-4 ${exporting ? 'animate-spin' : ''}`} />
+              {exporting ? 'Exporting...' : 'Export Members'}
+            </button>
           </div>
-          {user?.role === 'super_admin' && (
-            <p className="text-sm text-green-600 mt-1 flex items-center gap-1">
-              <CheckCircle className="h-4 w-4" />
-              Full access: Edit, delete, and assign user roles
-            </p>
-          )}
-          {user?.role === 'admin' && (
-            <p className="text-sm text-orange-600 mt-1 flex items-center gap-1">
-              <AlertTriangle className="h-4 w-4" />
-              Limited access: View members only - no editing, deleting, or role assignment
-            </p>
-          )}
-        </div>
-        <div className="flex items-center gap-3">
-          <button
-            onClick={handleExportMembers}
-            disabled={exporting || filteredMembers.length === 0}
-            className="flex items-center gap-2 px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 disabled:opacity-50 disabled:cursor-not-allowed text-sm"
-          >
-            <Download className={`h-4 w-4 ${exporting ? 'animate-spin' : ''}`} />
-            {exporting ? 'Exporting...' : 'Export Members'}
-          </button>
         </div>
       </div>
 
@@ -473,8 +534,8 @@ export function Members() {
 
       <div className="bg-white rounded-lg shadow-sm border border-gray-200">
         <div className="p-4 border-b border-gray-200">
-          <div className="flex flex-col sm:flex-row gap-4">
-            <div className="flex-1 relative">
+          <div className="flex flex-col gap-4">
+            <div className="relative">
               <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
               <input
                 type="text"
@@ -484,58 +545,242 @@ export function Members() {
                 className="pl-9 pr-4 py-2 w-full border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent"
               />
             </div>
-            <select
-              value={userTypeFilter}
-              onChange={(e) => setUserTypeFilter(e.target.value as typeof userTypeFilter)}
-              className="px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent"
-            >
-              <option value="all">All User Types</option>
-              <option value="buyer">Buyers Only</option>
-              <option value="seller">Sellers Only</option>
-              <option value="both">Buyer & Seller</option>
-            </select>
-            <select
-              value={status}
-              onChange={(e) => setStatus(e.target.value as typeof status)}
-              className="px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent"
-            >
-              <option value="all">All Status</option>
-              <option value="active">Active</option>
-              <option value="suspended">Suspended</option>
-            </select>
+            <div className="flex flex-col sm:flex-row gap-3">
+              <select
+                value={userTypeFilter}
+                onChange={(e) => setUserTypeFilter(e.target.value as typeof userTypeFilter)}
+                className="flex-1 px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+              >
+                <option value="all">All User Types</option>
+                <option value="buyer">Buyers Only</option>
+                <option value="seller">Sellers Only</option>
+                <option value="both">Buyer & Seller</option>
+              </select>
+              <select
+                value={status}
+                onChange={(e) => setStatus(e.target.value as typeof status)}
+                className="flex-1 px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+              >
+                <option value="all">All Status</option>
+                <option value="active">Active</option>
+                <option value="suspended">Suspended</option>
+              </select>
+            </div>
           </div>
         </div>
 
-        <div className="overflow-x-auto">
-          <table className="w-full">
-            <thead>
-              <tr className="border-b border-gray-200 bg-gray-50">
-                <th className="px-6 py-3 text-left">
-                  <div className="text-xs font-medium text-gray-500 uppercase tracking-wider">Member</div>
-                </th>
-                <th className="px-6 py-3 text-left">
-                  <div className="text-xs font-medium text-gray-500 uppercase tracking-wider">Contact</div>
-                </th>
-                <th className="px-6 py-3 text-left">
-                  <div className="text-xs font-medium text-gray-500 uppercase tracking-wider">Location</div>
-                </th>
-                <th className="px-6 py-3 text-left">
-                  <div className="text-xs font-medium text-gray-500 uppercase tracking-wider">User Type</div>
-                </th>
-                <th className="px-6 py-3 text-left">
-                  <div className="text-xs font-medium text-gray-500 uppercase tracking-wider">Role</div>
-                </th>
-                <th className="px-6 py-3 text-left">
-                  <div className="text-xs font-medium text-gray-500 uppercase tracking-wider">Status</div>
-                </th>
-                <th className="px-6 py-3 text-left">
-                  <div className="text-xs font-medium text-gray-500 uppercase tracking-wider">Join Date</div>
-                </th>
-                <th className="px-6 py-3 text-center">
-                  <div className="text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</div>
-                </th>
-              </tr>
-            </thead>
+        {/* Mobile Card Layout */}
+        <div className="block lg:hidden">
+          {filteredMembers.length === 0 ? (
+            <div className="flex flex-col items-center justify-center py-12 px-4">
+              <div className="text-gray-400 mb-4">
+                <svg className="h-12 w-12" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
+                </svg>
+              </div>
+              <h3 className="text-sm font-medium text-gray-900 mb-1">No members found</h3>
+              <p className="text-xs text-gray-500 text-center">
+                {searchTerm || userTypeFilter !== 'all' || status !== 'all'
+                  ? 'Try adjusting your search or filters'
+                  : 'No members have been added yet'
+                }
+              </p>
+            </div>
+          ) : (
+            <div className="space-y-4 p-4">
+              {filteredMembers.map((member) => (
+              <div
+                key={member.id}
+                className="bg-gray-50 rounded-lg p-4 border border-gray-200"
+              >
+                <div className="flex items-start justify-between mb-3">
+                  <div className="flex-1">
+                    <h3 className="font-medium text-gray-900 text-sm">{member.name}</h3>
+                    <p className="text-xs text-gray-500 mt-1">{member.email}</p>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    {getStatusIcon(member.status)}
+                    <Badge
+                      variant={member.status === 'active' ? 'success' : 'danger'}
+                      className="capitalize text-xs"
+                    >
+                      {member.status}
+                    </Badge>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 gap-2 text-xs">
+                  <div className="flex justify-between">
+                    <span className="text-gray-500">Phone:</span>
+                    <span className="text-gray-900">{member.phone}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-gray-500">Location:</span>
+                    <span className="text-gray-900">{member.location}</span>
+                  </div>
+                  <div className="flex justify-between items-center">
+                    <span className="text-gray-500">Type:</span>
+                    <span className={`px-2 py-1 text-xs font-medium rounded-full flex items-center gap-1 ${getUserTypeColor(member)}`}>
+                      {member.isSeller && <Store className="h-3 w-3" />}
+                      {getUserTypeLabel(member)}
+                    </span>
+                  </div>
+                  <div className="flex justify-between items-center">
+                    <span className="text-gray-500">Role:</span>
+                    <span className={`px-2 py-1 text-xs font-medium rounded-full ${getRoleColor(member.role ?? '')}`}>
+                      {getRoleLabel(member.role ?? '')}
+                    </span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-gray-500">Joined:</span>
+                    <span className="text-gray-900">
+                      {format(new Date(member.joinDate), 'MMM d, yyyy')}
+                    </span>
+                  </div>
+                  {member.isSeller && member.sellerInfo?.storeName && (
+                    <div className="flex justify-between">
+                      <span className="text-gray-500">Store:</span>
+                      <span className="text-gray-900 flex items-center gap-1">
+                        <Store className="h-3 w-3" />
+                        {member.sellerInfo.storeName}
+                      </span>
+                    </div>
+                  )}
+                </div>
+
+                {/* Mobile Actions */}
+                {user?.role === 'admin' ? (
+                  <div className="mt-3 text-center">
+                    <span className="text-xs text-gray-500 px-2 py-1 bg-gray-100 rounded">
+                      View Only
+                    </span>
+                  </div>
+                ) : user?.role === 'super_admin' ? (
+                  <div className="mt-3 flex flex-wrap gap-2 justify-center">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => {
+                        setSelectedMember(member);
+                        const [city, state] = member.location.split(',').map((s) => s.trim());
+                        setEditForm({
+                          name: member.name,
+                          email: member.email,
+                          phone: member.phone,
+                          city: city || '',
+                          state: state || '',
+                        });
+                        setShowEditModal(true);
+                      }}
+                      className="flex items-center gap-1 text-xs"
+                    >
+                      <Edit className="h-3 w-3" />
+                      Edit
+                    </Button>
+
+                    {member.role === 'user' && (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => handlePromoteToAdmin(member)}
+                        className="flex items-center gap-1 text-purple-600 hover:text-purple-700 text-xs"
+                      >
+                        <Crown className="h-3 w-3" />
+                        Promote to Admin
+                      </Button>
+                    )}
+
+                    {member.role === 'admin' && (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => handleEditAdminLocation(member)}
+                        className="flex items-center gap-1 text-blue-600 hover:text-blue-700 text-xs"
+                      >
+                        <Crown className="h-3 w-3" />
+                        Edit Location
+                      </Button>
+                    )}
+
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => {
+                        setSelectedMember(member);
+                        setSelectedRole(member.role ?? 'user');
+                        setShowRoleModal(true);
+                      }}
+                      className="flex items-center gap-1 text-xs"
+                    >
+                      <Crown className="h-3 w-3" />
+                      Role
+                    </Button>
+
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => handleDeleteMember(member.id)}
+                      className="flex items-center gap-1 text-red-600 hover:text-red-700 text-xs"
+                    >
+                      <Trash2 className="h-3 w-3" />
+                      Delete
+                    </Button>
+                  </div>
+                ) : null}
+              </div>
+            ))}
+            </div>
+          )}
+        </div>
+
+        {/* Desktop Table Layout */}
+        <div className="hidden lg:block">
+          {filteredMembers.length === 0 ? (
+            <div className="flex flex-col items-center justify-center py-16">
+              <div className="text-gray-400 mb-4">
+                <svg className="h-16 w-16" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
+                </svg>
+              </div>
+              <h3 className="text-lg font-medium text-gray-900 mb-2">No members found</h3>
+              <p className="text-sm text-gray-500 text-center max-w-sm">
+                {searchTerm || userTypeFilter !== 'all' || status !== 'all'
+                  ? 'Try adjusting your search or filters to find members'
+                  : 'No members have been added to the system yet'
+                }
+              </p>
+            </div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full">
+                <thead>
+                  <tr className="border-b border-gray-200 bg-gray-50">
+                    <th className="px-6 py-3 text-left">
+                      <div className="text-xs font-medium text-gray-500 uppercase tracking-wider">Member</div>
+                    </th>
+                    <th className="px-6 py-3 text-left">
+                      <div className="text-xs font-medium text-gray-500 uppercase tracking-wider">Contact</div>
+                    </th>
+                    <th className="px-6 py-3 text-left">
+                      <div className="text-xs font-medium text-gray-500 uppercase tracking-wider">Location</div>
+                    </th>
+                    <th className="px-6 py-3 text-left">
+                      <div className="text-xs font-medium text-gray-500 uppercase tracking-wider">User Type</div>
+                    </th>
+                    <th className="px-6 py-3 text-left">
+                      <div className="text-xs font-medium text-gray-500 uppercase tracking-wider">Role</div>
+                    </th>
+                    <th className="px-6 py-3 text-left">
+                      <div className="text-xs font-medium text-gray-500 uppercase tracking-wider">Status</div>
+                    </th>
+                    <th className="px-6 py-3 text-left">
+                      <div className="text-xs font-medium text-gray-500 uppercase tracking-wider">Join Date</div>
+                    </th>
+                    <th className="px-6 py-3 text-center">
+                      <div className="text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</div>
+                    </th>
+                  </tr>
+                </thead>
             <tbody className="divide-y divide-gray-200 bg-white">
               {filteredMembers.map((member) => (
                 <tr
@@ -568,11 +813,11 @@ export function Members() {
                           {member.sellerInfo.storeName}
                         </div>
                       )}
-                      {getSellerStatus(member) && (
+                      {/* {getSellerStatus(member) && (
                         <span className={`px-2 py-1 text-xs font-medium rounded-full ${getSellerStatus(member)?.color}`}>
                           {getSellerStatus(member)?.label}
                         </span>
-                      )}
+                      )} */}
                     </div>
                   </td>
                   <td className="px-6 py-4">
@@ -629,6 +874,30 @@ export function Members() {
                             Edit
                           </Button>
 
+                          {member.role === 'user' && (
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => handlePromoteToAdmin(member)}
+                              className="flex items-center gap-1 text-purple-600 hover:text-purple-700"
+                            >
+                              <Crown className="h-3 w-3" />
+                              Promote to Admin
+                            </Button>
+                          )}
+
+                          {member.role === 'admin' && (
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => handleEditAdminLocation(member)}
+                              className="flex items-center gap-1 text-blue-600 hover:text-blue-700"
+                            >
+                              <Crown className="h-3 w-3" />
+                              Edit Location
+                            </Button>
+                          )}
+
                           <Button
                             variant="outline"
                             size="sm"
@@ -676,7 +945,9 @@ export function Members() {
                 </tr>
               ))}
             </tbody>
-          </table>
+              </table>
+            </div>
+          )}
         </div>
       </div>
 
@@ -815,8 +1086,8 @@ export function Members() {
                 />
               </div>
 
-              <div className="flex gap-4">
-                <div className="w-1/2">
+              <div className="flex flex-col sm:flex-row gap-4">
+                <div className="flex-1">
                   <label className="block text-sm font-medium text-gray-700 mb-1">City</label>
                   <input
                     type="text"
@@ -825,7 +1096,7 @@ export function Members() {
                     className="w-full px-3 py-2 border border-gray-300 rounded-md"
                   />
                 </div>
-                <div className="w-1/2">
+                <div className="flex-1">
                   <label className="block text-sm font-medium text-gray-700 mb-1">State</label>
                   <input
                     type="text"
@@ -914,17 +1185,17 @@ export function Members() {
                 <div className="bg-gray-50 border border-gray-200 rounded-md p-3">
                   <h4 className="text-sm font-medium text-gray-900 mb-2">Role Permissions:</h4>
                   <div className="space-y-2 text-xs text-gray-600">
-                    <div className="flex items-start gap-2">
-                      <span className="px-2 py-1 bg-gray-100 text-gray-800 rounded text-xs">User</span>
-                      <span>Basic platform access, can buy/sell products</span>
+                    <div className="flex flex-col sm:flex-row sm:items-start gap-1 sm:gap-2">
+                      <span className="px-2 py-1 bg-gray-100 text-gray-800 rounded text-xs w-fit">User</span>
+                      <span className="flex-1">Basic platform access, can buy/sell products</span>
                     </div>
-                    <div className="flex items-start gap-2">
-                      <span className="px-2 py-1 bg-blue-100 text-blue-800 rounded text-xs">Admin</span>
-                      <span>View members, orders, and interests - no editing/deleting capabilities</span>
+                    <div className="flex flex-col sm:flex-row sm:items-start gap-1 sm:gap-2">
+                      <span className="px-2 py-1 bg-blue-100 text-blue-800 rounded text-xs w-fit">Admin</span>
+                      <span className="flex-1">View members, orders, and interests - no editing/deleting capabilities</span>
                     </div>
-                    <div className="flex items-start gap-2">
-                      <span className="px-2 py-1 bg-purple-100 text-purple-800 rounded text-xs">Super Admin</span>
-                      <span>Full system access, can edit/delete members, assign roles, direct password changes</span>
+                    <div className="flex flex-col sm:flex-row sm:items-start gap-1 sm:gap-2">
+                      <span className="px-2 py-1 bg-purple-100 text-purple-800 rounded text-xs w-fit">Super Admin</span>
+                      <span className="flex-1">Full system access, can edit/delete members, assign roles, direct password changes</span>
                     </div>
                   </div>
                 </div>
@@ -973,6 +1244,25 @@ export function Members() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Admin Location Modal */}
+      {selectedMemberForAdmin && (
+        <AdminLocationModal
+          isOpen={showAdminLocationModal}
+          onClose={() => {
+            setShowAdminLocationModal(false);
+            setSelectedMemberForAdmin(null);
+          }}
+          onSuccess={handleAdminLocationSuccess}
+          user={{
+            id: selectedMemberForAdmin.id,
+            name: selectedMemberForAdmin.name,
+            email: selectedMemberForAdmin.email,
+            role: selectedMemberForAdmin.role,
+          }}
+          mode={adminLocationModalMode}
+        />
+      )}
     </div>
   );
 }

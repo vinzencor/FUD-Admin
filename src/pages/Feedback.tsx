@@ -77,9 +77,20 @@ export function Feedback() {
 
       console.log('Direct feedback query result:', { feedbackData, feedbackError });
 
+      // Get reviews with user information
       const { data: reviewsData, error: reviewsError } = await supabase
         .from('reviews')
-        .select('*')
+        .select(`
+          *,
+          users!user_id(
+            full_name,
+            email
+          ),
+          listings!listing_id(
+            name,
+            seller_name
+          )
+        `)
         .order('created_at', { ascending: false });
 
       console.log('Direct reviews query result:', { reviewsData, reviewsError });
@@ -107,22 +118,33 @@ export function Feedback() {
         });
       }
 
-      // Transform reviews data
+      // Transform reviews data with proper user names
       if (reviewsData && !reviewsError) {
         reviewsData.forEach(item => {
+          const userName = item.users?.full_name || item.users?.email || 'Unknown User';
+          let subject = `${item.review_type} Review`;
+          let productName = '';
+
+          if (item.review_type === 'product' && item.listings) {
+            subject = `Product Review: ${item.listings.name}`;
+            productName = item.listings.name;
+          }
+
           allFeedback.push({
             id: item.id,
             type: 'review',
-            userName: 'Review User', // Simplified for now
-            subject: `${item.review_type} Review`,
+            userName: userName,
+            subject: subject,
             message: item.comment || `${item.rating}/5 star rating`,
             status: 'new',
             date: new Date(item.created_at).toLocaleDateString(),
             rating: item.rating,
             reviewType: item.review_type,
+            productName: productName,
+            sellerName: item.listings?.seller_name,
             user_id: item.user_id,
             created_at: item.created_at,
-            user_name: 'Review User'
+            user_name: userName
           });
         });
       }
