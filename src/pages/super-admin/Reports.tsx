@@ -34,17 +34,33 @@ export function Reports() {
     try {
       setLoading(true);
       setError(null);
+      setMessage(null);
+
+      console.log('Loading real report data...');
 
       const [farmers, locations] = await Promise.all([
         fetchFarmerRevenueData(),
         fetchLocationStats()
       ]);
 
+      console.log('Loaded farmers data:', farmers.length);
+      console.log('Loaded locations data:', locations.byState.length, locations.byCountry.length);
+
       setFarmerData(farmers);
       setLocationData(locations);
+
+      // Show message if no real data is available
+      if (farmers.length === 0) {
+        setMessage('No transaction data available yet. Reports will populate as sellers are approved and orders are processed.');
+      } else {
+        setMessage(`Showing real data from ${farmers.length} active sellers with transaction history.`);
+      }
+
     } catch (err) {
       console.error('Error loading report data:', err);
       setError(err instanceof Error ? err.message : 'Failed to load report data');
+      setFarmerData([]);
+      setLocationData({ byState: [], byCountry: [] });
     } finally {
       setLoading(false);
     }
@@ -301,10 +317,19 @@ export function Reports() {
       ) : (
         <div className="bg-white p-6 rounded-lg shadow text-center">
           <AlertCircle className="h-12 w-12 text-gray-400 mx-auto mb-4" />
-          <h3 className="text-lg font-medium text-gray-900 mb-2">No Data Available</h3>
-          <p className="text-gray-500">
-            No accepted orders found to generate reports. Reports are based on accepted orders only.
+          <h3 className="text-lg font-medium text-gray-900 mb-2">No Transaction Data Available</h3>
+          <p className="text-gray-500 mb-4">
+            Reports will populate automatically as real business activity occurs in the system.
           </p>
+          <div className="text-sm text-gray-600 bg-gray-50 p-4 rounded-lg">
+            <p className="font-medium mb-2">Reports are generated from:</p>
+            <ul className="text-left space-y-1">
+              <li>• Approved seller profiles</li>
+              <li>• Active product listings</li>
+              <li>• Accepted buyer interests</li>
+              <li>• Completed transactions</li>
+            </ul>
+          </div>
         </div>
       )}
     </div>

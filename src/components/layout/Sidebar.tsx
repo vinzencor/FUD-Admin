@@ -13,6 +13,7 @@ import {
   FileText,
   Activity,
   Home,
+  UserCog,
 } from 'lucide-react';
 import { cn } from '../../lib/utils';
 import { useAuthStore } from '../../store/authStore';
@@ -35,6 +36,10 @@ export function Sidebar() {
     { name: 'Feedback', to: `${basePath}/feedback`, icon: MessageSquare },
     { name: 'Reports', to: `${basePath}/reports`, icon: FileText },
     { name: 'Activity Logs', to: `${basePath}/activity-logs`, icon: Activity },
+    // Super admin only navigation
+    ...(user?.role === 'super_admin' ? [
+      { name: 'Admin Management', to: `${basePath}/admin-management`, icon: UserCog },
+    ] : []),
     { name: 'Settings', to: `${basePath}/settings`, icon: Settings },
   ];
 
