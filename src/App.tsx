@@ -3,7 +3,7 @@ import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-d
 import { Layout } from './components/layout/Layout';
 import { Dashboard } from './pages/Dashboard';
 import { Members } from './pages/Members';
-import { PMAMembers } from './pages/PMAMembers';
+// import { PMAMembers } from './pages/PMAMembers';
 import { Orders } from './pages/Orders';
 import { Interests } from './pages/Interests';
 import { Feedback } from './pages/Feedback';
@@ -16,6 +16,7 @@ import { HomePage } from './pages/HomePage';
 import { Login } from './pages/Login';
 import { Settings } from './pages/Settings';
 import { useAuthStore } from './store/authStore';
+import { AdminManagement } from './pages/super-admin/AdminManagement';
 
 function ProtectedRoute({
   children,
@@ -85,6 +86,7 @@ function App() {
           <Route path="feedback" element={<Feedback />} />
           <Route path="reports" element={<Reports />} />
           <Route path="activity-logs" element={<ActivityLogs />} />
+          <Route path="admin-management" element={<AdminManagement />} />
           <Route path="settings" element={<Settings />} />
         </Route>
 

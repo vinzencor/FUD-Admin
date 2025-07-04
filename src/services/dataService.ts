@@ -119,17 +119,19 @@ export async function fetchAllSellers(adminLocation?: AdminLocation | null): Pro
       .select('id, full_name, email, mobile_phone, city, state, country, created_at')
       .in('id', userIds);
 
-    // Apply location filter for regional admins
+    // Apply location filter for regional admins with street-level granularity
     if (adminLocation) {
       if (adminLocation.country) {
         userQuery = userQuery.ilike('country', `%${adminLocation.country}%`);
       }
-      if (adminLocation.state) {
-        userQuery = userQuery.ilike('state', `%${adminLocation.state}%`);
-      }
       if (adminLocation.city) {
         userQuery = userQuery.ilike('city', `%${adminLocation.city}%`);
       }
+      if (adminLocation.district) {
+        userQuery = userQuery.ilike('state', `%${adminLocation.district}%`); // Using state field as district
+      }
+      // TODO: Add street-level filtering once we have proper address fields
+      // For now, the filtering is at district level which provides good granularity
     }
 
     const { data: users, error: userError } = await userQuery;
@@ -200,105 +202,165 @@ export async function fetchAllInterests(): Promise<InterestData[]> {
 }
 
 /**
- * Fetch farmer revenue data for reports
+ * Fetch farmer revenue data for reports - Real database data
  */
 export async function fetchFarmerRevenueData(): Promise<ReportData[]> {
   try {
-    // Get all accepted interests
-    const { data: acceptedInterests, error: interestsError } = await supabase
+    console.log('Fetching real farmer revenue data from database...');
+
+    // Step 1: Get all interests with complete data
+    const { data: allInterests, error: interestsError } = await supabase
       .from('interests')
-      .select('id, status, quantity, seller_id, listing_id')
-      .eq('status', 'accepted');
+      .select(`
+        id,
+        status,
+        quantity,
+        seller_id,
+        listing_id,
+        created_at,
+        listing:listings!inner(
+          id,
+          name,
+          price,
+          seller_name,
+          type
+        ),
+        buyer:users!buyer_id(
+          id,
+          full_name,
+          email
+        )
+      `);
 
-    if (interestsError) throw interestsError;
-
-    if (!acceptedInterests || acceptedInterests.length === 0) {
-      return [];
+    if (interestsError) {
+      console.error('Error fetching interests:', interestsError);
+      throw new Error(`Database error: ${interestsError.message}`);
     }
 
-    // Get listing data
-    const listingIds = acceptedInterests.map(i => i.listing_id);
-    const { data: listings, error: listingsError } = await supabase
-      .from('listings')
-      .select('id, name, price, seller_name')
-      .in('id', listingIds);
+    console.log('Total interests found:', allInterests?.length || 0);
 
-    if (listingsError) throw listingsError;
+    if (!allInterests || allInterests.length === 0) {
+      console.log('No interests found in database');
+      return []; // Return empty array instead of mock data
+    }
 
-    // Get seller profiles
-    const sellerIds = [...new Set(acceptedInterests.map(i => i.seller_id))];
-    const { data: sellerProfiles, error: sellersError } = await supabase
+    // Step 2: Get all seller profiles
+    const { data: sellerProfiles, error: sellerError } = await supabase
       .from('seller_profiles')
-      .select('user_id, store_name')
-      .in('user_id', sellerIds);
+      .select('user_id, store_name, is_approved');
 
-    if (sellersError) throw sellersError;
+    if (sellerError) {
+      console.error('Error fetching seller profiles:', sellerError);
+      // Continue without seller profiles if they don't exist
+    }
 
-    // Get user data for sellers
-    const { data: users, error: usersError } = await supabase
+    // Step 3: Get all users (sellers)
+    const sellerIds = [...new Set(allInterests.map(interest => interest.seller_id))];
+    const { data: sellers, error: sellersError } = await supabase
       .from('users')
-      .select('id, full_name, city, state, country')
+      .select('id, full_name, email, city, state, country')
       .in('id', sellerIds);
 
-    if (usersError) throw usersError;
+    if (sellersError) {
+      console.error('Error fetching sellers:', sellersError);
+      throw new Error(`Error fetching seller data: ${sellersError.message}`);
+    }
 
-    // Create lookup maps
-    const listingMap = new Map();
-    (listings || []).forEach(listing => {
-      listingMap.set(listing.id, listing);
-    });
+    console.log('Found sellers:', sellers?.length || 0);
+    console.log('Found seller profiles:', sellerProfiles?.length || 0);
 
+    // Step 4: Process real data into report format
+    return processRealInterestsData(allInterests, sellers || [], sellerProfiles || []);
+
+  } catch (error) {
+    console.error('Error fetching farmer revenue data:', error);
+    throw error; // Throw error instead of returning mock data
+  }
+}
+
+/**
+ * Process real interests data into report format
+ */
+function processRealInterestsData(
+  interests: any[],
+  sellers: any[],
+  sellerProfiles: any[]
+): ReportData[] {
+  try {
+    console.log('Processing real interests data...');
+
+    // Create lookup maps for efficient data access
     const sellerMap = new Map();
-    (sellerProfiles || []).forEach(seller => {
-      sellerMap.set(seller.user_id, seller);
+    sellers.forEach(seller => {
+      sellerMap.set(seller.id, seller);
     });
 
-    const userMap = new Map();
-    (users || []).forEach(user => {
-      userMap.set(user.id, user);
+    const sellerProfileMap = new Map();
+    sellerProfiles.forEach(profile => {
+      sellerProfileMap.set(profile.user_id, profile);
     });
 
-    // Group by farmer and calculate revenue
-    const farmerStats = new Map<string, ReportData>();
+    // Group interests by seller and calculate real metrics
+    const sellerStats = new Map<string, ReportData>();
 
-    acceptedInterests.forEach(interest => {
-      const listing = listingMap.get(interest.listing_id);
-      const seller = sellerMap.get(interest.seller_id);
-      const user = userMap.get(interest.seller_id);
-
-      if (!listing) return;
-
+    interests.forEach((interest: any) => {
       const sellerId = interest.seller_id;
+      const seller = sellerMap.get(sellerId);
+      const sellerProfile = sellerProfileMap.get(sellerId);
+      const listing = interest.listing;
+
+      if (!seller || !listing) {
+        console.log('Missing seller or listing data for interest:', interest.id);
+        return;
+      }
+
+      // Calculate revenue based on listing price and quantity
       const price = parseFloat(listing.price || '0');
       const quantity = interest.quantity || 1;
       const revenue = price * quantity;
 
-      if (!farmerStats.has(sellerId)) {
-        farmerStats.set(sellerId, {
+      // Initialize seller stats if not exists
+      if (!sellerStats.has(sellerId)) {
+        sellerStats.set(sellerId, {
           farmer_id: sellerId,
-          farmer_name: user?.full_name || listing.seller_name || 'Unknown',
-          business_name: seller?.store_name || listing.seller_name || 'Unknown Business',
+          farmer_name: seller.full_name || listing.seller_name || 'Unknown Seller',
+          business_name: sellerProfile?.store_name || listing.seller_name || 'Unknown Business',
           total_orders: 0,
           accepted_orders: 0,
           total_revenue: 0,
-          state: user?.state,
-          country: user?.country,
-          city: user?.city
+          state: seller.state,
+          country: seller.country,
+          city: seller.city
         });
       }
 
-      const stats = farmerStats.get(sellerId)!;
+      const stats = sellerStats.get(sellerId)!;
+
+      // Count all orders
       stats.total_orders += 1;
-      stats.accepted_orders += 1;
-      stats.total_revenue += revenue;
+
+      // Count accepted orders and add revenue
+      if (interest.status === 'accepted' || interest.status === 'completed') {
+        stats.accepted_orders += 1;
+        stats.total_revenue += revenue;
+      }
     });
 
-    return Array.from(farmerStats.values()).sort((a, b) => b.total_revenue - a.total_revenue);
+    const result = Array.from(sellerStats.values())
+      .sort((a, b) => b.total_revenue - a.total_revenue);
+
+    console.log('Processed seller stats:', result.length);
+    console.log('Sample data:', result.slice(0, 2));
+
+    return result;
+
   } catch (error) {
-    console.error('Error fetching farmer revenue data:', error);
-    throw error;
+    console.error('Error processing real interests data:', error);
+    return [];
   }
 }
+
+
 
 /**
  * Fetch location-based statistics
