@@ -22,6 +22,8 @@ import {
   getAllAdminUsers,
   getAdminActivityStats,
   demoteAdminToUser,
+  debugDatabaseUsers,
+  assignAdminRole,
   formatLocationDisplay,
   formatLocationDisplayDetailed,
   formatLocationCompact,
@@ -61,6 +63,31 @@ export function AdminManagement() {
     loadAdmins();
   }, []);
 
+  // Function to assign super admin role
+  const assignSuperAdminRole = async () => {
+    try {
+      setLoading(true);
+      setError(null);
+      setSuccessMessage(null);
+
+      console.log('Assigning super admin role...');
+      const result = await assignAdminRole('rahulpradeepan77@gmail.com', 'super_admin');
+
+      if (result.success) {
+        setSuccessMessage(result.message);
+        // Reload admin users after assignment
+        await loadAdmins();
+      } else {
+        setError(result.message);
+      }
+    } catch (error) {
+      console.error('Error assigning super admin role:', error);
+      setError('Failed to assign super admin role');
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const loadAdmins = async () => {
     try {
       setLoading(true);
@@ -68,13 +95,19 @@ export function AdminManagement() {
       setSuccessMessage(null);
 
       console.log('Loading admin users...');
+
+      // Debug database contents
+      await debugDatabaseUsers();
+
       const adminUsers = await getAllAdminUsers();
       console.log('Fetched admin users:', adminUsers);
 
       if (adminUsers.length === 0) {
         console.log('No admin users found in database');
-        setError('No admin users found in the database. Please check if users have been assigned admin roles.');
+        setError('No admin users found in the database. Please assign admin roles to users first.');
+        setSuccessMessage(null);
       } else {
+        console.log('Successfully loaded admin users:', adminUsers.length);
         console.log('Admin users details:', adminUsers.map(admin => ({
           name: admin.name,
           email: admin.email,
@@ -82,6 +115,12 @@ export function AdminManagement() {
           hasLocation: !!admin.assignedLocation,
           assignedBy: admin.assignedByName
         })));
+
+        // Clear any previous errors
+        setError(null);
+
+        // Show success message for real data
+        setSuccessMessage(`Successfully loaded ${adminUsers.length} admin user(s) from database.`);
       }
 
       setAdmins(adminUsers);
@@ -398,12 +437,21 @@ export function AdminManagement() {
                 <UserCog className="h-12 w-12" />
               </div>
               <h3 className="text-sm font-medium text-gray-900 mb-1">No admins found</h3>
-              <p className="text-xs text-gray-500 text-center">
+              <p className="text-xs text-gray-500 text-center mb-4">
                 {searchTerm || roleFilter !== 'all' || locationFilter
                   ? 'Try adjusting your search or filters'
                   : 'No admin users have been created yet'
                 }
               </p>
+              {!searchTerm && roleFilter === 'all' && !locationFilter && (
+                <button
+                  onClick={assignSuperAdminRole}
+                  disabled={loading}
+                  className="px-4 py-2 bg-purple-600 text-white text-xs rounded-md hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {loading ? 'Assigning...' : 'Assign Super Admin Role'}
+                </button>
+              )}
             </div>
           ) : (
             <div className="space-y-4 p-4">
@@ -547,12 +595,22 @@ export function AdminManagement() {
                 <UserCog className="h-16 w-16" />
               </div>
               <h3 className="text-lg font-medium text-gray-900 mb-2">No admins found</h3>
-              <p className="text-sm text-gray-500 text-center max-w-sm">
+              <p className="text-sm text-gray-500 text-center max-w-sm mb-6">
                 {searchTerm || roleFilter !== 'all' || locationFilter
                   ? 'Try adjusting your search or filters to find admin users'
                   : 'No admin users have been created in the system yet'
                 }
               </p>
+              {!searchTerm && roleFilter === 'all' && !locationFilter && (
+                <button
+                  onClick={assignSuperAdminRole}
+                  disabled={loading}
+                  className="px-6 py-3 bg-purple-600 text-white text-sm rounded-md hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                >
+                  <UserCog className="h-4 w-4" />
+                  {loading ? 'Assigning...' : 'Assign Super Admin Role'}
+                </button>
+              )}
             </div>
           ) : (
             <div className="overflow-x-auto">

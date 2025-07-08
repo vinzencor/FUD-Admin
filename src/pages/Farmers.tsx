@@ -4,6 +4,7 @@ import { fetchAllSellers, SellerData } from '../services/dataService';
 import { exportWithLoading, generateFilename, formatDateForExport, formatArrayForExport, EXPORT_COLUMNS } from '../utils/exportUtils';
 import { useAuthStore } from '../store/authStore';
 import { getAdminAssignedLocation, AdminLocation } from '../services/locationAdminService';
+import { supabase } from '../supabaseClient';
 
 interface Farmer {
   id: string;
@@ -30,6 +31,15 @@ export function Farmers() {
   const [error, setError] = useState<string | null>(null);
   const [exportMessage, setExportMessage] = useState<string | null>(null);
   const [statusFilter, setStatusFilter] = useState<string>('all');
+  const [saving, setSaving] = useState(false);
+
+  // Form state for editing
+  const [editForm, setEditForm] = useState({
+    name: '',
+    email: '',
+    phone: '',
+    location: ''
+  });
 
   useEffect(() => {
     loadFarmers();
@@ -112,13 +122,181 @@ export function Farmers() {
 
   const handleEditFarmer = (farmer: Farmer) => {
     setSelectedFarmer(farmer);
+    setEditForm({
+      name: farmer.name,
+      email: farmer.email,
+      phone: farmer.phone,
+      location: farmer.location
+    });
     setShowEditModal(true);
   };
 
   const handleStatusChange = (farmerId: string, newStatus: Farmer['status']) => {
-    setFarmers(farmers.map(farmer => 
+    setFarmers(farmers.map(farmer =>
       farmer.id === farmerId ? { ...farmer, status: newStatus } : farmer
     ));
+  };
+
+  const handleSaveFarmer = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedFarmer) return;
+
+    // Validate form data
+    if (!editForm.name.trim()) {
+      setError('Business name is required');
+      return;
+    }
+    if (!editForm.email.trim()) {
+      setError('Email is required');
+      return;
+    }
+    if (!editForm.phone.trim()) {
+      setError('Phone number is required');
+      return;
+    }
+    if (!editForm.location.trim()) {
+      setError('Location is required');
+      return;
+    }
+
+    // Validate email format
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(editForm.email)) {
+      setError('Please enter a valid email address');
+      return;
+    }
+
+    try {
+      setSaving(true);
+      setError(null);
+
+      console.log('Updating farmer in database...', {
+        farmerId: selectedFarmer.id,
+        formData: editForm
+      });
+
+      // Parse location string to extract city, state, country
+      // Handle various location formats: "City", "City, State", "City, State, Country"
+      const locationParts = editForm.location.split(',').map(part => part.trim()).filter(part => part.length > 0);
+      const city = locationParts[0] || '';
+      const state = locationParts[1] || '';
+      const country = locationParts[2] || locationParts[1] || ''; // If only 2 parts, second could be country
+
+      // Update user table (personal information)
+      const { error: userError } = await supabase
+        .from('users')
+        .update({
+          full_name: editForm.name,
+          email: editForm.email,
+          mobile_phone: editForm.phone,
+          city: city,
+          state: state,
+          country: country
+        })
+        .eq('id', selectedFarmer.id);
+
+      if (userError) {
+        console.error('Error updating user table:', userError);
+        throw new Error(`Failed to update user information: ${userError.message}`);
+      }
+
+      // Update seller_profiles table (business information)
+      const { error: sellerError } = await supabase
+        .from('seller_profiles')
+        .update({
+          store_name: editForm.name
+        })
+        .eq('user_id', selectedFarmer.id);
+
+      if (sellerError) {
+        console.error('Error updating seller_profiles table:', sellerError);
+        throw new Error(`Failed to update seller profile: ${sellerError.message}`);
+      }
+
+      console.log('Database update successful');
+
+      // Verify the update was successful
+      const verificationSuccess = await verifyDatabaseUpdate(selectedFarmer.id);
+      if (!verificationSuccess) {
+        throw new Error('Database update verification failed');
+      }
+
+      // Update the farmer in the local state
+      const updatedFarmer = {
+        ...selectedFarmer,
+        name: editForm.name,
+        email: editForm.email,
+        phone: editForm.phone,
+        location: editForm.location
+      };
+
+      setFarmers(farmers.map(farmer =>
+        farmer.id === selectedFarmer.id ? updatedFarmer : farmer
+      ));
+
+      // Close the modal
+      setShowEditModal(false);
+      setSelectedFarmer(null);
+
+      // Refresh farmer data from database to ensure we have the latest data
+      await loadFarmers();
+
+      // Show success message
+      setExportMessage('Farmer profile updated and verified successfully in database!');
+      setTimeout(() => setExportMessage(null), 3000);
+
+    } catch (error) {
+      console.error('Error updating farmer:', error);
+      setError(error instanceof Error ? error.message : 'Failed to update farmer profile. Please try again.');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleFormChange = (field: keyof typeof editForm, value: string) => {
+    setEditForm(prev => ({
+      ...prev,
+      [field]: value
+    }));
+  };
+
+  // Helper function to verify database update
+  const verifyDatabaseUpdate = async (farmerId: string) => {
+    try {
+      // Check if the user data was updated
+      const { data: userData, error: userError } = await supabase
+        .from('users')
+        .select('full_name, email, mobile_phone, city, state, country')
+        .eq('id', farmerId)
+        .single();
+
+      if (userError) {
+        console.error('Error verifying user update:', userError);
+        return false;
+      }
+
+      // Check if the seller profile was updated
+      const { data: sellerData, error: sellerError } = await supabase
+        .from('seller_profiles')
+        .select('store_name')
+        .eq('user_id', farmerId)
+        .single();
+
+      if (sellerError) {
+        console.error('Error verifying seller profile update:', sellerError);
+        return false;
+      }
+
+      console.log('Database verification successful:', {
+        user: userData,
+        seller: sellerData
+      });
+
+      return true;
+    } catch (error) {
+      console.error('Error during database verification:', error);
+      return false;
+    }
   };
 
   const filteredFarmers = statusFilter === 'all'
@@ -271,18 +449,20 @@ export function Farmers() {
       </div>
 
       {showEditModal && selectedFarmer && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center">
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
           <div className="bg-white rounded-lg p-6 w-full max-w-md">
             <h3 className="text-lg font-semibold mb-4">Edit Farmer Profile</h3>
-            <form className="space-y-4">
+            <form onSubmit={handleSaveFarmer} className="space-y-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
                   Business Name
                 </label>
                 <input
                   type="text"
-                  defaultValue={selectedFarmer.name}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md"
+                  value={editForm.name}
+                  onChange={(e) => handleFormChange('name', e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500"
+                  required
                 />
               </div>
               <div>
@@ -291,8 +471,10 @@ export function Farmers() {
                 </label>
                 <input
                   type="email"
-                  defaultValue={selectedFarmer.email}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md"
+                  value={editForm.email}
+                  onChange={(e) => handleFormChange('email', e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500"
+                  required
                 />
               </div>
               <div>
@@ -301,8 +483,10 @@ export function Farmers() {
                 </label>
                 <input
                   type="tel"
-                  defaultValue={selectedFarmer.phone}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md"
+                  value={editForm.phone}
+                  onChange={(e) => handleFormChange('phone', e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500"
+                  required
                 />
               </div>
               <div>
@@ -311,23 +495,30 @@ export function Farmers() {
                 </label>
                 <input
                   type="text"
-                  defaultValue={selectedFarmer.location}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md"
+                  value={editForm.location}
+                  onChange={(e) => handleFormChange('location', e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500"
+                  required
                 />
               </div>
               <div className="flex justify-end space-x-2 mt-6">
                 <button
                   type="button"
-                  onClick={() => setShowEditModal(false)}
-                  className="px-4 py-2 border border-gray-300 rounded-md hover:bg-gray-50"
+                  onClick={() => {
+                    setShowEditModal(false);
+                    setSelectedFarmer(null);
+                  }}
+                  className="px-4 py-2 border border-gray-300 rounded-md hover:bg-gray-50 disabled:opacity-50"
+                  disabled={saving}
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
-                  className="px-4 py-2 bg-primary-600 text-white rounded-md hover:bg-primary-700"
+                  className="px-4 py-2 bg-primary-600 text-white rounded-md hover:bg-primary-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                  disabled={saving}
                 >
-                  Save Changes
+                  {saving ? 'Saving...' : 'Save Changes'}
                 </button>
               </div>
             </form>

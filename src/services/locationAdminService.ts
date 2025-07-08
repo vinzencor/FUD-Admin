@@ -406,41 +406,142 @@ export function formatLocationDisplayDetailed(location: AdminLocation | null): s
 }
 
 /**
+ * Manually assign admin role to a user by email (for testing/setup)
+ */
+export async function assignAdminRole(email: string, role: 'admin' | 'super_admin' = 'admin'): Promise<{ success: boolean; message: string }> {
+  try {
+    console.log(`Assigning ${role} role to ${email}...`);
+
+    // Check if user exists
+    const { data: users, error: fetchError } = await supabase
+      .from('users')
+      .select('id, email, role')
+      .eq('email', email);
+
+    if (fetchError) {
+      return { success: false, message: `Database error: ${fetchError.message}` };
+    }
+
+    if (!users || users.length === 0) {
+      return { success: false, message: `User with email ${email} not found in database` };
+    }
+
+    const user = users[0];
+
+    // Update role
+    const { error: updateError } = await supabase
+      .from('users')
+      .update({ role })
+      .eq('id', user.id);
+
+    if (updateError) {
+      return { success: false, message: `Error updating role: ${updateError.message}` };
+    }
+
+    console.log(`Successfully assigned ${role} role to ${email}`);
+    return { success: true, message: `Successfully assigned ${role} role to ${email}` };
+
+  } catch (error) {
+    console.error('Error in assignAdminRole:', error);
+    return { success: false, message: `Unexpected error: ${error}` };
+  }
+}
+
+/**
+ * Debug function to check what users exist in the database
+ */
+export async function debugDatabaseUsers(): Promise<void> {
+  try {
+    console.log('=== DATABASE DEBUG INFO ===');
+
+    const { data: allUsers, error } = await supabase
+      .from('users')
+      .select('id, full_name, email, role, created_at')
+      .order('created_at', { ascending: false });
+
+    if (error) {
+      console.error('Error fetching users for debug:', error);
+      return;
+    }
+
+    console.log('Total users in database:', allUsers?.length || 0);
+
+    if (allUsers && allUsers.length > 0) {
+      console.log('All users:');
+      allUsers.forEach((user, index) => {
+        console.log(`${index + 1}. Email: ${user.email}, Role: ${user.role || 'null'}, Name: ${user.full_name || 'null'}`);
+      });
+
+      const adminUsers = allUsers.filter(u => ['admin', 'super_admin'].includes(u.role));
+      console.log(`Admin users found: ${adminUsers.length}`);
+
+      if (adminUsers.length > 0) {
+        console.log('Admin users:');
+        adminUsers.forEach((user, index) => {
+          console.log(`${index + 1}. ${user.email} - ${user.role}`);
+        });
+      }
+    } else {
+      console.log('No users found in database');
+    }
+
+    console.log('=== END DEBUG INFO ===');
+  } catch (error) {
+    console.error('Error in debugDatabaseUsers:', error);
+  }
+}
+
+/**
  * Get all admin users with their location assignments and assignment details
  */
 export async function getAllAdminUsers(): Promise<AdminUser[]> {
   try {
     console.log('Fetching admin users from database...');
 
-    // First, try to get all users to see if there are any users at all
+    // Get all users from database
     const { data: allUsers, error: allUsersError } = await supabase
       .from('users')
-      .select('id, full_name, email, role, admin_assigned_location, created_at, updated_at');
+      .select('id, full_name, email, role, admin_assigned_location, created_at');
 
     if (allUsersError) {
       console.error('Error fetching all users:', allUsersError);
-      return getMockAdminUsers();
+      console.log('Database error occurred. Please check your database connection.');
+      throw new Error(`Database error: ${allUsersError.message}`);
     }
 
     console.log('Total users in database:', allUsers?.length || 0);
 
-    // Check if the super admin user exists
-    const superAdminUser = allUsers?.find(user => user.email === 'rahulpradeepan77@gmail.com');
-    if (!superAdminUser) {
-      console.log('Super admin user not found, creating mock data...');
-      return getMockAdminUsers();
+    if (!allUsers || allUsers.length === 0) {
+      console.log('No users found in database');
+      return [];
     }
 
+    // Log all users for debugging
+    console.log('All users in database:', allUsers.map(u => ({
+      email: u.email,
+      role: u.role,
+      name: u.full_name
+    })));
+
     // Get users with admin roles
-    const adminUsers = allUsers?.filter(user => ['admin', 'super_admin'].includes(user.role)) || [];
+    const adminUsers = allUsers.filter(user => {
+      const hasAdminRole = ['admin', 'super_admin'].includes(user.role);
+      if (hasAdminRole) {
+        console.log(`Found admin user: ${user.email} with role: ${user.role}`);
+      }
+      return hasAdminRole;
+    });
+
     console.log('Found admin users:', adminUsers.length);
 
+    // If no admin users found, check if we need to assign super admin role
     if (adminUsers.length === 0) {
-      console.log('No admin users found, but users exist. Checking if super admin needs role assignment...');
+      console.log('No admin users found. Checking for super admin assignment...');
 
-      // If the super admin user exists but doesn't have the role, update it
+      const superAdminUser = allUsers.find(user => user.email === 'rahulpradeepan77@gmail.com');
       if (superAdminUser && superAdminUser.role !== 'super_admin') {
-        console.log('Updating super admin role...');
+        console.log('Assigning super admin role to rahulpradeepan77@gmail.com...');
+
         const { error: updateError } = await supabase
           .from('users')
           .update({ role: 'super_admin' })
@@ -449,28 +550,25 @@ export async function getAllAdminUsers(): Promise<AdminUser[]> {
         if (updateError) {
           console.error('Error updating super admin role:', updateError);
         } else {
-          console.log('Super admin role updated successfully');
+          console.log('Super admin role assigned successfully');
           // Refetch after update
           return getAllAdminUsers();
         }
       }
 
-      return getMockAdminUsers();
+      // Instead of returning mock data, return empty array to show real state
+      console.log('No admin users found in database. Returning empty array.');
+      return [];
     }
 
-    // Sort admin users
+    // Sort admin users (super admins first, then by creation date)
     adminUsers.sort((a, b) => {
       if (a.role === 'super_admin' && b.role !== 'super_admin') return -1;
       if (b.role === 'super_admin' && a.role !== 'super_admin') return 1;
       return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
     });
 
-    if (!adminUsers || adminUsers.length === 0) {
-      console.log('No admin users found in database, returning mock data');
-      return getMockAdminUsers();
-    }
-
-    console.log('Successfully fetched admin users:', adminUsers.length);
+    console.log('Processing admin users for display...');
 
     // Get all super admin users for assignment tracking
     const superAdmins = adminUsers.filter(user => user.role === 'super_admin');
@@ -486,9 +584,9 @@ export async function getAllAdminUsers(): Promise<AdminUser[]> {
       let assignedDate: string | undefined;
 
       if (user.role === 'admin' && assignedLocation) {
-        // For now, we'll use the updated_at date as assignment date
+        // For now, we'll use the created_at date as assignment date
         // In a real system, you'd have a separate assignment tracking table
-        assignedDate = user.updated_at;
+        assignedDate = user.created_at;
 
         // If there's only one super admin, assume they made the assignment
         if (superAdmins.length === 1) {
@@ -507,7 +605,7 @@ export async function getAllAdminUsers(): Promise<AdminUser[]> {
         role: user.role as 'admin' | 'super_admin',
         assignedLocation,
         createdAt: user.created_at,
-        updatedAt: user.updated_at,
+        updatedAt: user.created_at, // Use created_at since updated_at doesn't exist
         status: 'active',
         assignedBy,
         assignedByName,
@@ -518,7 +616,8 @@ export async function getAllAdminUsers(): Promise<AdminUser[]> {
     return processedAdmins;
   } catch (error) {
     console.error('Error in getAllAdminUsers:', error);
-    return getMockAdminUsers();
+    // Return empty array instead of mock data to show real database state
+    return [];
   }
 }
 

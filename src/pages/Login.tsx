@@ -8,13 +8,15 @@ import { UserRole } from '../supabaseClient';
 export function Login() {
   const navigate = useNavigate();
   const login = useAuthStore((state) => state.login);
-  const [role, setRole] = useState<UserRole>('admin');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
   const [isAuthorizing, setIsAuthorizing] = useState(false);
   const [authSuccess, setAuthSuccess] = useState(false);
+
+  // Super admin email constant
+  const SUPER_ADMIN_EMAIL = 'rahulpradeepan77@gmail.com';
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -41,7 +43,10 @@ export function Login() {
       // Show authorization step
       setIsAuthorizing(true);
 
-      // Get user role and details from the users table (new database-based approach)
+      // Check if this is the super admin user
+      const isSuperAdmin = data.user.email === SUPER_ADMIN_EMAIL;
+
+      // Get user role and details from the users table
       let userRole = null;
       let userName = data.user.user_metadata?.name || '';
 
@@ -64,6 +69,30 @@ export function Login() {
         console.log('Error fetching user data:', err);
         // Fallback to app_metadata if database query fails
         userRole = data.user.app_metadata?.role;
+      }
+
+      // Automatically assign super admin role if this is the designated super admin user
+      if (isSuperAdmin && userRole !== 'super_admin') {
+        console.log('Automatically assigning super admin role to:', data.user.email);
+
+        try {
+          // Update role in database
+          const { error: updateError } = await supabase
+            .from('users')
+            .update({ role: 'super_admin' })
+            .eq('id', data.user.id);
+
+          if (updateError) {
+            console.error('Error updating super admin role:', updateError);
+            // Continue with existing role if update fails
+          } else {
+            userRole = 'super_admin';
+            console.log('Super admin role assigned successfully');
+          }
+        } catch (updateErr) {
+          console.error('Error in super admin role assignment:', updateErr);
+          // Continue with existing role if update fails
+        }
       }
 
       // Check if user has admin or super_admin role
@@ -132,35 +161,32 @@ export function Login() {
           {isAuthorizing && (
             <div className="mb-4 p-3 bg-blue-50 text-blue-700 rounded-md text-sm flex items-center">
               <Shield className="h-4 w-4 mr-2 animate-pulse" />
-              Verifying admin permissions...
+              {email === SUPER_ADMIN_EMAIL
+                ? 'Configuring super admin access...'
+                : 'Verifying admin permissions...'
+              }
             </div>
           )}
 
           {authSuccess && (
             <div className="mb-4 p-3 bg-green-50 text-green-700 rounded-md text-sm flex items-center">
               <CheckCircle className="h-4 w-4 mr-2" />
-              Admin access authorized! Redirecting...
+              {email === SUPER_ADMIN_EMAIL
+                ? 'Super admin access granted! Redirecting...'
+                : 'Admin access authorized! Redirecting...'
+              }
             </div>
           )}
           
           <form onSubmit={handleSubmit} className="space-y-6">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
-                Login As
-              </label>
-              <select
-                value={role}
-                onChange={(e) => setRole(e.target.value as UserRole)}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500"
-              >
-                <option value="admin">Regional Admin</option>
-                <option value="super_admin">Super Admin</option>
-              </select>
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
                 Email Address
+                {email === SUPER_ADMIN_EMAIL && (
+                  <span className="ml-2 text-xs text-purple-600 font-medium">
+                    (Super Admin)
+                  </span>
+                )}
               </label>
               <div className="relative">
                 <Mail className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-5 w-5" />
@@ -168,11 +194,20 @@ export function Login() {
                   type="email"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
-                  className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500"
+                  className={`w-full pl-10 pr-4 py-2 border rounded-md focus:outline-none focus:ring-2 ${
+                    email === SUPER_ADMIN_EMAIL
+                      ? 'border-purple-300 focus:ring-purple-500 bg-purple-50'
+                      : 'border-gray-300 focus:ring-primary-500'
+                  }`}
                   placeholder="Enter your email"
                   required
                 />
               </div>
+              {email === SUPER_ADMIN_EMAIL && (
+                <p className="mt-1 text-xs text-purple-600">
+                  Super admin privileges will be automatically assigned
+                </p>
+              )}
             </div>
 
             <div>
@@ -223,7 +258,7 @@ export function Login() {
                 <span className="font-medium text-purple-600">Super Admin</span> roles can access this panel.
               </p>
               <p className="text-xs text-gray-500 mt-1">
-                Contact your system administrator if you need admin access.
+                Super admin privileges are automatically assigned to authorized users.
               </p>
             </div>
           </div>
