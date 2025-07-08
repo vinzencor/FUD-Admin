@@ -88,7 +88,7 @@ export function Members() {
               userQuery = userQuery.ilike('country', `%${adminLocation.country}%`);
             }
             if (adminLocation.state) {
-              userQuery = userQuery.ilike('state', `%${adminLocation.state}%`);
+              userQuery = userQuery.ilike('state', `%${adminLocation?.state}%`);
             }
             if (adminLocation.city) {
               userQuery = userQuery.ilike('city', `%${adminLocation.city}%`);
@@ -702,7 +702,7 @@ export function Members() {
                       </Button>
                     )}
 
-                    <Button
+                    {/* <Button
                       variant="outline"
                       size="sm"
                       onClick={() => {
@@ -714,7 +714,7 @@ export function Members() {
                     >
                       <Crown className="h-3 w-3" />
                       Role
-                    </Button>
+                    </Button> */}
 
                     <Button
                       variant="outline"
@@ -898,7 +898,7 @@ export function Members() {
                             </Button>
                           )}
 
-                          <Button
+                          {/* <Button
                             variant="outline"
                             size="sm"
                             onClick={() => {
@@ -910,7 +910,7 @@ export function Members() {
                           >
                             <Crown className="h-3 w-3" />
                             Role
-                          </Button>
+                          </Button> */}
 
                           <Button
                             variant="outline"

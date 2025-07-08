@@ -144,14 +144,25 @@ export function Reports() {
     const columns = getExportColumns();
     const filename = generateFilename(`${reportType}-report`);
 
-    await exportWithLoading(
-      () => Promise.resolve(data),
-      columns,
-      filename,
-      setExporting,
-      (count) => setMessage(`Successfully exported ${count} records`),
-      (error) => setError(error)
-    );
+    if (reportType === 'farmers') {
+      await exportWithLoading<ReportData>(
+        () => Promise.resolve(data as ReportData[]),
+        columns,
+        filename,
+        setExporting,
+        (count) => setMessage(`Successfully exported ${count} records`),
+        (error) => setError(error)
+      );
+    } else {
+      await exportWithLoading<LocationStats>(
+        () => Promise.resolve(data as LocationStats[]),
+        columns,
+        filename,
+        setExporting,
+        (count) => setMessage(`Successfully exported ${count} records`),
+        (error) => setError(error)
+      );
+    }
 
     // Clear message after 3 seconds
     setTimeout(() => setMessage(null), 3000);
