@@ -331,6 +331,231 @@ export function hasLocationRestrictions(userRole: string, assignedLocation: Admi
 }
 
 /**
+ * Enhanced location filtering for all data types
+ * Provides comprehensive filtering for different admin modules
+ */
+export interface LocationFilterOptions {
+  includeUsers?: boolean;
+  includeSellers?: boolean;
+  includeBuyers?: boolean;
+  includeOrders?: boolean;
+  includeFeedback?: boolean;
+  includeListings?: boolean;
+}
+
+/**
+ * Get comprehensive location-filtered data for admin modules
+ */
+export async function getLocationFilteredData(
+  location: AdminLocation,
+  options: LocationFilterOptions = {}
+): Promise<{
+  userIds: string[];
+  sellerIds: string[];
+  buyerIds: string[];
+  orderIds: string[];
+  feedbackIds: string[];
+  listingIds: string[];
+}> {
+  const result = {
+    userIds: [] as string[],
+    sellerIds: [] as string[],
+    buyerIds: [] as string[],
+    orderIds: [] as string[],
+    feedbackIds: [] as string[],
+    listingIds: [] as string[]
+  };
+
+  try {
+    // Get base user IDs that match location
+    const baseUserIds = await getLocationFilteredUserIds(location);
+
+    if (baseUserIds.length === 0) {
+      return result;
+    }
+
+    // Filter users by type if requested
+    if (options.includeUsers || options.includeSellers || options.includeBuyers) {
+      const { data: users, error: usersError } = await supabase
+        .from('users')
+        .select('id, default_mode')
+        .in('id', baseUserIds);
+
+      if (!usersError && users) {
+        result.userIds = users.map(u => u.id);
+
+        if (options.includeSellers) {
+          result.sellerIds = users
+            .filter(u => u.default_mode === 'seller' || u.default_mode === 'both')
+            .map(u => u.id);
+        }
+
+        if (options.includeBuyers) {
+          result.buyerIds = users
+            .filter(u => u.default_mode === 'buyer' || u.default_mode === 'both')
+            .map(u => u.id);
+        }
+      }
+    }
+
+    // Get orders for location-filtered users
+    if (options.includeOrders && baseUserIds.length > 0) {
+      const { data: orders, error: ordersError } = await supabase
+        .from('interests')
+        .select('id')
+        .or(`buyer_id.in.(${baseUserIds.join(',')}),seller_id.in.(${baseUserIds.join(',')})`);
+
+      if (!ordersError && orders) {
+        result.orderIds = orders.map(o => o.id);
+      }
+    }
+
+    // Get feedback/reviews for location-filtered users
+    if (options.includeFeedback && baseUserIds.length > 0) {
+      const { data: reviews, error: reviewsError } = await supabase
+        .from('product_reviews')
+        .select('id')
+        .in('user_id', baseUserIds);
+
+      if (!reviewsError && reviews) {
+        result.feedbackIds = reviews.map(r => r.id);
+      }
+    }
+
+    // Get listings for location-filtered sellers
+    if (options.includeListings && result.sellerIds.length > 0) {
+      const { data: listings, error: listingsError } = await supabase
+        .from('listings')
+        .select('id')
+        .in('seller_id', result.sellerIds);
+
+      if (!listingsError && listings) {
+        result.listingIds = listings.map(l => l.id);
+      }
+    }
+
+    return result;
+  } catch (error) {
+    console.error('Error in getLocationFilteredData:', error);
+    return result;
+  }
+}
+
+/**
+ * Apply location filter to a Supabase query builder
+ * This is a utility function to easily add location filtering to any query
+ */
+export function applyLocationFilter(
+  query: any,
+  location: AdminLocation,
+  tableAlias?: string
+): any {
+  if (!location) return query;
+
+  const prefix = tableAlias ? `${tableAlias}.` : '';
+
+  if (location.country) {
+    query = query.ilike(`${prefix}country`, `%${location.country}%`);
+  }
+  if (location.city) {
+    query = query.ilike(`${prefix}city`, `%${location.city}%`);
+  }
+  if (location.district) {
+    query = query.ilike(`${prefix}state`, `%${location.district}%`);
+  }
+
+  return query;
+}
+
+/**
+ * Check if a user's location matches the admin's assigned location
+ */
+export function doesUserMatchLocation(
+  userLocation: { country?: string; city?: string; state?: string },
+  adminLocation: AdminLocation
+): boolean {
+  if (!adminLocation) return true; // Super admin has no restrictions
+
+  // Check country match
+  if (adminLocation.country && userLocation.country) {
+    if (!userLocation.country.toLowerCase().includes(adminLocation.country.toLowerCase())) {
+      return false;
+    }
+  }
+
+  // Check city match
+  if (adminLocation.city && userLocation.city) {
+    if (!userLocation.city.toLowerCase().includes(adminLocation.city.toLowerCase())) {
+      return false;
+    }
+  }
+
+  // Check district/state match
+  if (adminLocation.district && userLocation.state) {
+    if (!userLocation.state.toLowerCase().includes(adminLocation.district.toLowerCase())) {
+      return false;
+    }
+  }
+
+  return true;
+}
+
+/**
+ * Get location-based query filter for admin access control
+ * Returns null for super admin (no restrictions), location filter for regional admin
+ */
+export async function getAdminLocationFilter(userId: string): Promise<AdminLocation | null> {
+  try {
+    const { data: user, error } = await supabase
+      .from('users')
+      .select('role, admin_assigned_location')
+      .eq('id', userId)
+      .single();
+
+    if (error || !user) {
+      console.error('Error fetching admin location filter:', error);
+      return null;
+    }
+
+    // Super admin has no location restrictions
+    if (user.role === 'super_admin') {
+      return null;
+    }
+
+    // Regional admin has location restrictions
+    if (user.role === 'admin' && user.admin_assigned_location) {
+      return parseAdminLocation(user.admin_assigned_location);
+    }
+
+    return null;
+  } catch (error) {
+    console.error('Error in getAdminLocationFilter:', error);
+    return null;
+  }
+}
+
+/**
+ * Check if current user can access data from a specific location
+ */
+export async function canAccessLocation(
+  currentUserId: string,
+  targetLocation: { country?: string; city?: string; state?: string }
+): Promise<boolean> {
+  try {
+    const adminLocation = await getAdminLocationFilter(currentUserId);
+
+    // Super admin can access all locations
+    if (!adminLocation) return true;
+
+    // Check if target location matches admin's assigned location
+    return doesUserMatchLocation(targetLocation, adminLocation);
+  } catch (error) {
+    console.error('Error checking location access:', error);
+    return false;
+  }
+}
+
+/**
  * Format location for display with street-level hierarchy
  */
 export function formatLocationDisplay(location: AdminLocation | null): string {

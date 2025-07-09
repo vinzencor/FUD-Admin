@@ -9,7 +9,7 @@ import { Interests } from './pages/Interests';
 import { Feedback } from './pages/Feedback';
 import { Farmers } from './pages/Farmers';
 import { Reports } from './pages/super-admin/Reports';
-import { ActivityLogs } from './pages/super-admin/ActivityLogs';
+
 import { SuperAdminSetup } from './pages/SuperAdminSetup';
 import { DebugDataService } from './pages/DebugDataService';
 import { HomePage } from './pages/HomePage';
@@ -85,7 +85,6 @@ function App() {
           <Route path="interests" element={<Interests />} />
           <Route path="feedback" element={<Feedback />} />
           <Route path="reports" element={<Reports />} />
-          <Route path="activity-logs" element={<ActivityLogs />} />
           <Route path="admin-management" element={<AdminManagement />} />
           <Route path="settings" element={<Settings />} />
         </Route>
@@ -109,7 +108,6 @@ function App() {
           <Route path="interests" element={<Interests />} />
           <Route path="feedback" element={<Feedback />} />
           <Route path="reports" element={<Reports />} />
-          <Route path="activity-logs" element={<ActivityLogs />} />
           <Route path="settings" element={<Settings />} />
         </Route>
 

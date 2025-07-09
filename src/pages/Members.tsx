@@ -15,7 +15,13 @@ import { supabase } from '../supabaseClient';
 import { updateUserRole, roleLabels, roleDescriptions } from '../utils/roleManagement';
 import { exportWithLoading, generateFilename, formatDateForExport, formatBooleanForExport, EXPORT_COLUMNS } from '../utils/exportUtils';
 import { AdminLocationModal } from '../components/admin/AdminLocationModal';
-import { getAdminAssignedLocation, formatLocationDisplay, AdminLocation } from '../services/locationAdminService';
+import {
+  getAdminAssignedLocation,
+  formatLocationDisplay,
+  AdminLocation,
+  applyLocationFilter,
+  getAdminLocationFilter
+} from '../services/locationAdminService';
 
 interface Member {
   id: string;
@@ -84,15 +90,7 @@ export function Members() {
 
           // Apply location filter for regional admins
           if (adminLocation) {
-            if (adminLocation.country) {
-              userQuery = userQuery.ilike('country', `%${adminLocation.country}%`);
-            }
-            if (adminLocation.state) {
-              userQuery = userQuery.ilike('state', `%${adminLocation?.state}%`);
-            }
-            if (adminLocation.city) {
-              userQuery = userQuery.ilike('city', `%${adminLocation.city}%`);
-            }
+            userQuery = applyLocationFilter(userQuery, adminLocation);
           }
 
           const result = await userQuery;
@@ -107,15 +105,7 @@ export function Members() {
 
           // Apply location filter for regional admins even in fallback
           if (adminLocation) {
-            if (adminLocation.country) {
-              fallbackQuery = fallbackQuery.ilike('country', `%${adminLocation.country}%`);
-            }
-            if (adminLocation.state) {
-              fallbackQuery = fallbackQuery.ilike('state', `%${adminLocation.state}%`);
-            }
-            if (adminLocation.city) {
-              fallbackQuery = fallbackQuery.ilike('city', `%${adminLocation.city}%`);
-            }
+            fallbackQuery = applyLocationFilter(fallbackQuery, adminLocation);
           }
 
           const result = await fallbackQuery;

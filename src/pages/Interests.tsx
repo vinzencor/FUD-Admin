@@ -3,6 +3,11 @@ import { useAuthStore } from '../store/authStore';
 import { supabase } from '../supabaseClient';
 import { Search, Download, RefreshCw, Eye, MessageSquare, User, Package } from 'lucide-react';
 import { exportWithLoading, generateFilename, formatDateForExport, formatCurrencyForExport, ExportColumn } from '../utils/exportUtils';
+import {
+  getAdminAssignedLocation,
+  AdminLocation,
+  getLocationFilteredUserIds
+} from '../services/locationAdminService';
 
 /**
  * Interests Page - Displays all interests from all users
@@ -83,6 +88,25 @@ export function Interests() {
 
       console.log('Fetching interests with filters:', { statusFilter, dateFilter, searchTerm });
 
+      // Get admin's assigned location for filtering
+      let adminLocation: AdminLocation | null = null;
+      if (user?.role === 'admin' && user?.id) {
+        adminLocation = await getAdminAssignedLocation(user.id);
+      }
+
+      // Get location-filtered user IDs if admin has location restrictions
+      let locationFilteredUserIds: string[] = [];
+      if (adminLocation) {
+        locationFilteredUserIds = await getLocationFilteredUserIds(adminLocation);
+        if (locationFilteredUserIds.length === 0) {
+          // No users in admin's location, return empty results
+          setInterests([]);
+          setTotalCount(0);
+          setLoading(false);
+          return;
+        }
+      }
+
       // Build query for interests table with all related data
       let query = supabase
         .from('interests')
@@ -105,6 +129,11 @@ export function Interests() {
             state
           )
         `);
+
+      // Apply location filter for regional admins
+      if (adminLocation && locationFilteredUserIds.length > 0) {
+        query = query.or(`buyer_id.in.(${locationFilteredUserIds.join(',')}),seller_id.in.(${locationFilteredUserIds.join(',')})`);
+      }
 
       // Apply filters
       if (statusFilter !== 'all') {

@@ -1,10 +1,11 @@
 import React, { useState, useEffect } from 'react';
-import { Users, ShoppingBag, Store, ArrowUpRight, MessageSquare, FileText, Activity } from 'lucide-react';
+import { Users, ShoppingBag, Store, ArrowUpRight, MessageSquare, FileText } from 'lucide-react';
 import { StatCard } from '../components/dashboard/StatCard';
 import { useAuthStore } from '../store/authStore';
 import { supabase } from '../supabaseClient';
 import { Link } from 'react-router-dom';
 import { fetchDashboardStats } from '../services/dataService';
+import { getAdminAssignedLocation, AdminLocation } from '../services/locationAdminService';
 
 interface DashboardStats {
   members: number;
@@ -12,7 +13,6 @@ interface DashboardStats {
   orders: number;
   feedback: number;
   reports: number;
-  activityLog: number;
 }
 
 interface Order {
@@ -32,13 +32,13 @@ export function Dashboard() {
     farmers: 0,
     orders: 0,
     feedback: 0,
-    reports: 0,
-    activityLog: 0
+    reports: 0
   });
   const [recentOrders, setRecentOrders] = useState<Order[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [refreshingCache, setRefreshingCache] = useState(false);
+  const [adminLocation, setAdminLocation] = useState<AdminLocation | null>(null);
   
   // Get region name safely
   const regionName = user?.regions && user.regions.length > 0 
@@ -56,12 +56,21 @@ export function Dashboard() {
       setLoading(true);
       setError(null);
 
-      // Fetch stats based on user role
-      const statsData = await fetchStats();
+      // Get admin's assigned location for filtering
+      let adminLocationFilter: AdminLocation | null = null;
+      if (user?.role === 'admin' && user?.id) {
+        adminLocationFilter = await getAdminAssignedLocation(user.id);
+      }
+
+      // Set the admin location state for display
+      setAdminLocation(adminLocationFilter);
+
+      // Fetch stats based on user role with location filtering
+      const statsData = await fetchStats(adminLocationFilter);
       setStats(statsData);
 
-      // Fetch recent orders
-      const orders = await fetchRecentOrders();
+      // Fetch recent orders with location filtering
+      const orders = await fetchRecentOrders(adminLocationFilter);
       setRecentOrders(orders);
     } catch (err) {
       console.error('Error fetching dashboard data:', err);
@@ -92,20 +101,20 @@ export function Dashboard() {
     }
   };
 
-  const fetchStats = async (): Promise<DashboardStats> => {
+  const fetchStats = async (adminLocationFilter?: AdminLocation | null): Promise<DashboardStats> => {
     try {
-      // Use the centralized data service
-      return await fetchDashboardStats();
+      // Use the centralized data service with location filtering
+      return await fetchDashboardStats(adminLocationFilter);
     } catch (error) {
       console.error('Error fetching stats:', error);
       // Return fallback data if there's an error
       return isSuperAdmin
-        ? { members: 8976, farmers: 1245, orders: 367, feedback: 89, reports: 12, activityLog: 156 }
-        : { members: 1856, farmers: 234, orders: 86, feedback: 23, reports: 3, activityLog: 45 };
+        ? { members: 8976, farmers: 1245, orders: 367, feedback: 89, reports: 12 }
+        : { members: 1856, farmers: 234, orders: 86, feedback: 23, reports: 3 };
     }
   };
 
-  const fetchRecentOrders = async (): Promise<Order[]> => {
+  const fetchRecentOrders = async (adminLocationFilter?: AdminLocation | null): Promise<Order[]> => {
     try {
       // Use the database function for better performance and error handling
       const { data, error } = await supabase.rpc('get_dashboard_stats');
@@ -124,7 +133,7 @@ export function Dashboard() {
       }
 
       // Fallback to direct query if function fails
-      const { data: fallbackData, error: fallbackError } = await supabase
+      let fallbackQuery = supabase
         .from('interests')
         .select(`
           *,
@@ -138,9 +147,43 @@ export function Dashboard() {
           buyer:users!buyer_id(
             id,
             full_name,
-            email
+            email,
+            city,
+            state,
+            country
           )
-        `)
+        `);
+
+      // Apply location filtering for regional admins
+      if (adminLocationFilter) {
+        // Get location-filtered user IDs first
+        let userQuery = supabase
+          .from('users')
+          .select('id');
+
+        if (adminLocationFilter.country) {
+          userQuery = userQuery.ilike('country', `%${adminLocationFilter.country}%`);
+        }
+        if (adminLocationFilter.city) {
+          userQuery = userQuery.ilike('city', `%${adminLocationFilter.city}%`);
+        }
+        if (adminLocationFilter.district) {
+          userQuery = userQuery.ilike('state', `%${adminLocationFilter.district}%`);
+        }
+
+        const { data: locationUsers } = await userQuery;
+
+        if (locationUsers && locationUsers.length > 0) {
+          const userIds = locationUsers.map(u => u.id);
+          // Filter interests by buyer or seller location
+          fallbackQuery = fallbackQuery.or(`buyer_id.in.(${userIds.join(',')}),seller_id.in.(${userIds.join(',')})`);
+        } else {
+          // No users in the location, return empty array
+          return [];
+        }
+      }
+
+      const { data: fallbackData, error: fallbackError } = await fallbackQuery
         .order('created_at', { ascending: false })
         .limit(5);
 
@@ -211,9 +254,20 @@ export function Dashboard() {
   return (
     <div className="space-y-6">
       <div className="flex justify-between items-center">
-        <h2 className="text-2xl font-semibold text-gray-900">
-          {isSuperAdmin ? 'Global Overview' : `${regionName} Overview`}
-        </h2>
+        <div>
+          <h2 className="text-2xl font-semibold text-gray-900">
+            {isSuperAdmin ? 'Global Overview' : `${regionName} Overview`}
+          </h2>
+          {adminLocation ? (
+            <div className="mt-2 text-sm text-blue-600 bg-blue-50 px-3 py-1 rounded-full inline-block">
+              📍 Viewing data for: {adminLocation.city}, {adminLocation.district}, {adminLocation.country}
+            </div>
+          ) : user?.role === 'super_admin' ? (
+            <div className="mt-2 text-sm text-purple-600 bg-purple-50 px-3 py-1 rounded-full inline-block">
+              🌍 Global Access - All Locations
+            </div>
+          ) : null}
+        </div>
         <div className="flex gap-2">
           <button
             onClick={fetchDashboardData}
@@ -234,7 +288,7 @@ export function Dashboard() {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4">
         <StatCard
           title="Total Members"
           value={stats.members}
@@ -269,13 +323,6 @@ export function Dashboard() {
           icon={FileText}
           description="Generated reports"
           to={`${basePath}/reports`}
-        />
-        <StatCard
-          title="Activity Log"
-          value={stats.activityLog}
-          icon={Activity}
-          description="System activities"
-          to={`${basePath}/activity-logs`}
         />
       </div>
 

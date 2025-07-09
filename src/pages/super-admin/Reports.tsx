@@ -3,6 +3,8 @@ import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, Responsive
 import { Download, RefreshCw, AlertCircle } from 'lucide-react';
 import { fetchFarmerRevenueData, fetchLocationStats, ReportData, LocationStats } from '../../services/dataService';
 import { exportWithLoading, generateFilename, formatCurrencyForExport, ExportColumn } from '../../utils/exportUtils';
+import { useAuthStore } from '../../store/authStore';
+import { getAdminAssignedLocation, AdminLocation } from '../../services/locationAdminService';
 
 interface ChartData {
   name: string;
@@ -12,12 +14,14 @@ interface ChartData {
 }
 
 export function Reports() {
+  const user = useAuthStore((state) => state.user);
   const [reportType, setReportType] = useState<'farmers' | 'state' | 'country'>('farmers');
   const [metric, setMetric] = useState<'orders' | 'revenue' | 'farmers'>('revenue');
   const [loading, setLoading] = useState(true);
   const [exporting, setExporting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
+  const [adminLocation, setAdminLocation] = useState<AdminLocation | null>(null);
 
   // Data states
   const [farmerData, setFarmerData] = useState<ReportData[]>([]);
@@ -27,8 +31,29 @@ export function Reports() {
   }>({ byState: [], byCountry: [] });
 
   useEffect(() => {
-    loadReportData();
-  }, []);
+    loadAdminLocation();
+  }, [user]);
+
+  useEffect(() => {
+    if (adminLocation !== undefined) { // Wait for location to be loaded (null is valid for super admin)
+      loadReportData();
+    }
+  }, [adminLocation]);
+
+  const loadAdminLocation = async () => {
+    try {
+      if (user?.role === 'admin' && user?.id) {
+        const location = await getAdminAssignedLocation(user.id);
+        setAdminLocation(location);
+      } else {
+        // Super admin has no location restrictions
+        setAdminLocation(null);
+      }
+    } catch (error) {
+      console.error('Error loading admin location:', error);
+      setAdminLocation(null);
+    }
+  };
 
   const loadReportData = async () => {
     try {
@@ -39,8 +64,8 @@ export function Reports() {
       console.log('Loading real report data...');
 
       const [farmers, locations] = await Promise.all([
-        fetchFarmerRevenueData(),
-        fetchLocationStats()
+        fetchFarmerRevenueData(adminLocation),
+        fetchLocationStats(adminLocation)
       ]);
 
       console.log('Loaded farmers data:', farmers.length);
@@ -184,6 +209,15 @@ export function Reports() {
         <div>
           <h2 className="text-2xl font-semibold text-gray-900">Reports</h2>
           <p className="text-gray-600 mt-1">Revenue and performance analytics based on accepted orders</p>
+          {adminLocation ? (
+            <div className="mt-2 text-sm text-blue-600 bg-blue-50 px-3 py-1 rounded-full inline-block">
+              📍 Viewing data for: {adminLocation.city}, {adminLocation.district}, {adminLocation.country}
+            </div>
+          ) : user?.role === 'super_admin' ? (
+            <div className="mt-2 text-sm text-purple-600 bg-purple-50 px-3 py-1 rounded-full inline-block">
+              🌍 Global Access - All Locations
+            </div>
+          ) : null}
         </div>
         <div className="flex gap-2">
           <button
