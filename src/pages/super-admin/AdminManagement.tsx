@@ -32,6 +32,7 @@ import {
   AdminLocation
 } from '../../services/locationAdminService';
 import { AdminLocationModal } from '../../components/admin/AdminLocationModal';
+import { EnhancedAdminAssignment } from '../../components/admin/EnhancedAdminAssignment';
 import { exportWithLoading, generateFilename, ExportColumn } from '../../utils/exportUtils';
 
 export function AdminManagement() {
@@ -51,6 +52,7 @@ export function AdminManagement() {
   // Modal states
   const [showLocationModal, setShowLocationModal] = useState(false);
   const [selectedAdmin, setSelectedAdmin] = useState<AdminUser | null>(null);
+  const [activeTab, setActiveTab] = useState<'manage' | 'assign'>('manage');
 
   // Redirect if not super admin
   useEffect(() => {
@@ -391,8 +393,54 @@ export function AdminManagement() {
         </div>
       )}
 
-      {/* Filters */}
+      {/* Tab Navigation */}
       <div className="bg-white rounded-lg shadow-sm border border-gray-200">
+        <div className="border-b border-gray-200">
+          <nav className="flex space-x-8 px-6" aria-label="Tabs">
+            <button
+              onClick={() => setActiveTab('manage')}
+              className={`py-4 px-1 border-b-2 font-medium text-sm ${
+                activeTab === 'manage'
+                  ? 'border-purple-500 text-purple-600'
+                  : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+              }`}
+            >
+              <div className="flex items-center gap-2">
+                <UserCog className="h-4 w-4" />
+                Manage Admins
+              </div>
+            </button>
+            <button
+              onClick={() => setActiveTab('assign')}
+              className={`py-4 px-1 border-b-2 font-medium text-sm ${
+                activeTab === 'assign'
+                  ? 'border-purple-500 text-purple-600'
+                  : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+              }`}
+            >
+              <div className="flex items-center gap-2">
+                <Crown className="h-4 w-4" />
+                Assign New Admin
+              </div>
+            </button>
+          </nav>
+        </div>
+      </div>
+
+      {/* Tab Content */}
+      {activeTab === 'assign' ? (
+        <EnhancedAdminAssignment
+          onAdminAssigned={() => {
+            loadAdmins();
+            setActiveTab('manage');
+          }}
+          onError={(error) => setError(error)}
+          onSuccess={(message) => setSuccessMessage(message)}
+        />
+      ) : (
+        <>
+          {/* Filters */}
+          <div className="bg-white rounded-lg shadow-sm border border-gray-200">
         <div className="p-4 border-b border-gray-200">
           <div className="flex flex-col gap-4">
             <div className="relative">
@@ -790,6 +838,8 @@ export function AdminManagement() {
           }}
           mode="edit"
         />
+      )}
+        </>
       )}
     </div>
   );

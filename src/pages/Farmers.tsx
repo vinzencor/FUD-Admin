@@ -3,7 +3,12 @@ import { Search, Filter, CheckCircle, XCircle, AlertCircle, Download, RefreshCw 
 import { fetchAllSellers, SellerData } from '../services/dataService';
 import { exportWithLoading, generateFilename, formatDateForExport, formatArrayForExport, EXPORT_COLUMNS } from '../utils/exportUtils';
 import { useAuthStore } from '../store/authStore';
-import { getAdminAssignedLocation, AdminLocation } from '../services/locationAdminService';
+import {
+  getAdminAssignedLocation,
+  AdminLocation,
+  getLocationFilteredData,
+  LocationFilterOptions
+} from '../services/locationAdminService';
 import { supabase } from '../supabaseClient';
 
 interface Farmer {
@@ -32,6 +37,7 @@ export function Farmers() {
   const [exportMessage, setExportMessage] = useState<string | null>(null);
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [saving, setSaving] = useState(false);
+  const [adminLocation, setAdminLocation] = useState<AdminLocation | null>(null);
 
   // Form state for editing
   const [editForm, setEditForm] = useState({
@@ -51,12 +57,15 @@ export function Farmers() {
       setError(null);
 
       // Get admin's assigned location for filtering
-      let adminLocation: AdminLocation | null = null;
+      let adminLocationFilter: AdminLocation | null = null;
       if (user?.role === 'admin' && user?.id) {
-        adminLocation = await getAdminAssignedLocation(user.id);
+        adminLocationFilter = await getAdminAssignedLocation(user.id);
       }
 
-      const sellersData = await fetchAllSellers(adminLocation);
+      // Set the admin location state for display
+      setAdminLocation(adminLocationFilter);
+
+      const sellersData = await fetchAllSellers(adminLocationFilter);
 
       // Transform seller data to farmer format
       const farmersData: Farmer[] = sellersData.map(seller => ({
@@ -318,6 +327,15 @@ export function Farmers() {
         <div>
           <h2 className="text-2xl font-semibold text-gray-900">Farmers</h2>
           <p className="text-gray-600 mt-1">Manage seller profiles and farmer accounts ({farmers.length} total)</p>
+          {adminLocation ? (
+            <div className="mt-2 text-sm text-blue-600 bg-blue-50 px-3 py-1 rounded-full inline-block">
+              📍 Viewing farmers from: {adminLocation.city}, {adminLocation.district}, {adminLocation.country}
+            </div>
+          ) : user?.role === 'super_admin' ? (
+            <div className="mt-2 text-sm text-purple-600 bg-purple-50 px-3 py-1 rounded-full inline-block">
+              🌍 Global Access - All Locations
+            </div>
+          ) : null}
         </div>
         <div className="flex gap-2">
           <button

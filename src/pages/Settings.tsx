@@ -1,10 +1,12 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useAuthStore } from '../store/authStore';
 import { supabase } from '../supabaseClient';
-import { Eye, EyeOff, X, Lock } from 'lucide-react';
+import { Eye, EyeOff, X, Lock, MapPin, Globe } from 'lucide-react';
+import { getAdminAssignedLocation, AdminLocation } from '../services/locationAdminService';
 
 export function Settings() {
   const user = useAuthStore((state) => state.user);
+  const [adminLocation, setAdminLocation] = useState<AdminLocation | null | undefined>(undefined);
   const [notifications, setNotifications] = useState({
     email: true,
     dashboard: true,
@@ -26,6 +28,28 @@ export function Settings() {
   const [passwordLoading, setPasswordLoading] = useState(false);
   const [passwordError, setPasswordError] = useState<string | null>(null);
   const [passwordSuccess, setPasswordSuccess] = useState(false);
+
+  // Load admin location on component mount
+  useEffect(() => {
+    const loadAdminLocation = async () => {
+      try {
+        if (user?.role === 'admin' && user?.id) {
+          const location = await getAdminAssignedLocation(user.id);
+          setAdminLocation(location);
+        } else {
+          // Super admin has no location restrictions
+          setAdminLocation(null);
+        }
+      } catch (error) {
+        console.error('Error loading admin location:', error);
+        setAdminLocation(null);
+      }
+    };
+
+    if (user) {
+      loadAdminLocation();
+    }
+  }, [user]);
 
   // Password strength checker
   const getPasswordStrength = (password: string) => {
@@ -188,6 +212,77 @@ export function Settings() {
                 className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-primary-500 focus:border-primary-500"
               />
             </div>
+          </div>
+        </div>
+
+        {/* Admin Location Section */}
+        <div className="p-6">
+          <h3 className="text-lg font-medium text-gray-900 flex items-center gap-2">
+            <MapPin className="h-5 w-5 text-gray-600" />
+            Admin Access Location
+          </h3>
+          <div className="mt-4">
+            {adminLocation === undefined ? (
+              <div className="flex items-center gap-2 text-gray-500">
+                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-gray-400"></div>
+                Loading location information...
+              </div>
+            ) : adminLocation === null ? (
+              <div className="bg-purple-50 border border-purple-200 rounded-lg p-4">
+                <div className="flex items-center gap-3">
+                  <Globe className="h-6 w-6 text-purple-600" />
+                  <div>
+                    <h4 className="font-medium text-purple-900">Global Access</h4>
+                    <p className="text-sm text-purple-700 mt-1">
+                      As a super administrator, you have unrestricted access to all locations and data across the entire system.
+                    </p>
+                  </div>
+                </div>
+              </div>
+            ) : (
+              <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                <div className="flex items-center gap-3">
+                  <MapPin className="h-6 w-6 text-blue-600" />
+                  <div>
+                    <h4 className="font-medium text-blue-900">Regional Access</h4>
+                    <p className="text-sm text-blue-700 mt-1">
+                      Your admin access is restricted to the following geographic location:
+                    </p>
+                    <div className="mt-3 space-y-2">
+                      {adminLocation.country && (
+                        <div className="flex items-center gap-2 text-sm">
+                          <span className="font-medium text-blue-800">Country:</span>
+                          <span className="text-blue-700">{adminLocation.country}</span>
+                        </div>
+                      )}
+                      {adminLocation.district && (
+                        <div className="flex items-center gap-2 text-sm">
+                          <span className="font-medium text-blue-800">State/District:</span>
+                          <span className="text-blue-700">{adminLocation.district}</span>
+                        </div>
+                      )}
+                      {adminLocation.city && (
+                        <div className="flex items-center gap-2 text-sm">
+                          <span className="font-medium text-blue-800">City:</span>
+                          <span className="text-blue-700">{adminLocation.city}</span>
+                        </div>
+                      )}
+                      {adminLocation.streets && adminLocation.streets.length > 0 && (
+                        <div className="flex items-start gap-2 text-sm">
+                          <span className="font-medium text-blue-800">Streets:</span>
+                          <div className="text-blue-700">
+                            {adminLocation.streets.join(', ')}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                    <div className="mt-3 p-2 bg-blue-100 rounded text-xs text-blue-800">
+                      <strong>Note:</strong> You can only view and manage data from users, farmers, orders, and reports within your assigned location.
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
         </div>
 

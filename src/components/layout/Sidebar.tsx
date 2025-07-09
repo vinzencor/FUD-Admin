@@ -35,7 +35,6 @@ export function Sidebar() {
     { name: 'Interests', to: `${basePath}/interests`, icon: Heart },
     { name: 'Feedback', to: `${basePath}/feedback`, icon: MessageSquare },
     { name: 'Reports', to: `${basePath}/reports`, icon: FileText },
-    { name: 'Activity Logs', to: `${basePath}/activity-logs`, icon: Activity },
     // Super admin only navigation
     ...(user?.role === 'super_admin' ? [
       { name: 'Admin Management', to: `${basePath}/admin-management`, icon: UserCog },
