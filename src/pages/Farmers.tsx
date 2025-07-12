@@ -329,7 +329,7 @@ export function Farmers() {
           <p className="text-gray-600 mt-1">Manage seller profiles and farmer accounts ({farmers.length} total)</p>
           {adminLocation ? (
             <div className="mt-2 text-sm text-blue-600 bg-blue-50 px-3 py-1 rounded-full inline-block">
-              📍 Viewing farmers from: {adminLocation.city}, {adminLocation.district}, {adminLocation.country}
+              📍 Viewing farmers from: {adminLocation.zipcode ? `Zipcode ${adminLocation.zipcode}, ` : ''}{adminLocation.city}, {adminLocation.district}, {adminLocation.country}
             </div>
           ) : user?.role === 'super_admin' ? (
             <div className="mt-2 text-sm text-purple-600 bg-purple-50 px-3 py-1 rounded-full inline-block">

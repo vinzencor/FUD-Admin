@@ -1,9 +1,11 @@
 import { supabase } from '../supabaseClient';
+import { invalidateZipcodesCache } from './hierarchicalLocationService';
 
 export interface AdminLocation {
   country?: string;
   city?: string;
   district?: string;
+  zipcode?: string;
   streets?: string[];
 }
 
@@ -73,19 +75,26 @@ export async function getAdminAssignedLocation(userId: string): Promise<AdminLoc
  * Set admin's assigned location (super admin only)
  */
 export async function setAdminAssignedLocation(
-  userId: string, 
+  userId: string,
   location: AdminLocation
 ): Promise<boolean> {
   try {
+    console.log('Setting admin assigned location:', { userId, location });
+
     const { error } = await supabase
       .from('users')
-      .update({ admin_assigned_location: location })
+      .update({ admin_assigned_location: JSON.stringify(location) })
       .eq('id', userId);
 
     if (error) {
       console.error('Error setting admin location:', error);
       return false;
     }
+
+    console.log('Admin location successfully updated');
+
+    // Invalidate zipcodes cache to ensure real-time updates
+    invalidateZipcodesCache();
 
     return true;
   } catch (error) {
@@ -98,15 +107,17 @@ export async function setAdminAssignedLocation(
  * Promote user to admin with location assignment
  */
 export async function promoteUserToAdmin(
-  userId: string, 
+  userId: string,
   location: AdminLocation
 ): Promise<boolean> {
   try {
+    console.log('Promoting user to admin:', { userId, location });
+
     const { error } = await supabase
       .from('users')
-      .update({ 
+      .update({
         role: 'admin',
-        admin_assigned_location: location 
+        admin_assigned_location: JSON.stringify(location)
       })
       .eq('id', userId);
 
@@ -114,6 +125,11 @@ export async function promoteUserToAdmin(
       console.error('Error promoting user to admin:', error);
       return false;
     }
+
+    console.log('User successfully promoted to admin');
+
+    // Invalidate zipcodes cache to ensure real-time updates
+    invalidateZipcodesCache();
 
     return true;
   } catch (error) {
@@ -139,6 +155,9 @@ export async function demoteAdminToUser(userId: string): Promise<boolean> {
       console.error('Error demoting admin to user:', error);
       return false;
     }
+
+    // Invalidate zipcodes cache to ensure real-time updates
+    invalidateZipcodesCache();
 
     return true;
   } catch (error) {
@@ -464,6 +483,24 @@ export function applyLocationFilter(
     query = query.ilike(`${prefix}state`, `%${location.district}%`);
   }
 
+  // Add zipcode filtering (most specific level)
+  if (location.zipcode) {
+    // For generated zipcodes (like "NYC001"), we don't filter by zipcode field
+    // since users don't have these values - city/country filtering is sufficient
+    if (!location.zipcode.match(/^[A-Z]{3}\d{3}$/)) {
+      // Real zipcode from database - try to filter by zipcode field
+      try {
+        query = query.eq(`${prefix}zipcode`, location.zipcode);
+        console.log('Applied zipcode filter:', location.zipcode);
+      } catch (error) {
+        console.warn('Zipcode field filtering failed, using city/country only:', error);
+        // Continue with city/country filtering
+      }
+    } else {
+      console.log('Using generated zipcode, filtering by city/country only:', location.zipcode);
+    }
+  }
+
   return query;
 }
 
@@ -572,7 +609,8 @@ export function formatLocationDisplay(location: AdminLocation | null): string {
     }
   }
 
-  // Add district, city, country in hierarchy order
+  // Add zipcode, district, city, country in hierarchy order
+  if (location.zipcode) parts.push(`Zipcode: ${location.zipcode}`);
   if (location.district) {
     const districtName = location.district.includes('District')
       ? location.district
@@ -622,7 +660,8 @@ export function formatLocationDisplayDetailed(location: AdminLocation | null): s
     parts.push(`Streets: ${location.streets.join(', ')}`);
   }
 
-  // Add district, city, country
+  // Add zipcode, district, city, country
+  if (location.zipcode) parts.push(`Zipcode: ${location.zipcode}`);
   if (location.district) parts.push(`District: ${location.district}`);
   if (location.city) parts.push(`City: ${location.city}`);
   if (location.country) parts.push(`Country: ${location.country}`);
@@ -849,7 +888,7 @@ export async function getAllAdminUsers(): Promise<AdminUser[]> {
 /**
  * Parse admin location data from database, handling both old and new formats
  */
-function parseAdminLocation(locationData: any): AdminLocation | null {
+export function parseAdminLocation(locationData: any): AdminLocation | null {
   if (!locationData) return null;
 
   try {
@@ -864,15 +903,17 @@ function parseAdminLocation(locationData: any): AdminLocation | null {
         country: location.country,
         city: location.city,
         district: location.state, // Convert old state to district
+        zipcode: location.zipcode,
         streets: location.streets || []
       };
     }
 
-    // Handle new format (country, city, district, streets)
+    // Handle new format (country, city, district, zipcode, streets)
     return {
       country: location.country,
       city: location.city,
       district: location.district,
+      zipcode: location.zipcode,
       streets: Array.isArray(location.streets) ? location.streets : []
     };
   } catch (error) {

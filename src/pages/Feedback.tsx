@@ -4,6 +4,7 @@ import { useAuthStore } from '../store/authStore';
 import { supabase } from '../supabaseClient';
 // import { fetchAllFeedback } from '../services/dataService'; // Using direct queries for now
 import { exportWithLoading, generateFilename, formatDateForExport, ExportColumn } from '../utils/exportUtils';
+import { getAdminAssignedLocation, AdminLocation } from '../services/locationAdminService';
 
 interface Feedback {
   id: string;
@@ -60,6 +61,7 @@ export function Feedback() {
   const [isDeleting, setIsDeleting] = useState(false);
   const [exporting, setExporting] = useState(false);
   const [exportMessage, setExportMessage] = useState<string | null>(null);
+  const [adminLocation, setAdminLocation] = useState<AdminLocation | null>(null);
 
   // Fetch feedback data from database
   const fetchFeedback = async () => {
@@ -69,16 +71,73 @@ export function Feedback() {
 
       console.log('Starting to fetch feedback...');
 
-      // Test direct Supabase queries first
-      const { data: feedbackData, error: feedbackError } = await supabase
+      // Get admin's assigned location for filtering
+      let adminLocationFilter: AdminLocation | null = null;
+      if (user?.role === 'admin' && user?.id) {
+        adminLocationFilter = await getAdminAssignedLocation(user.id);
+        console.log('Admin location for feedback filtering:', adminLocationFilter);
+      }
+
+      // Set the admin location state for display
+      setAdminLocation(adminLocationFilter);
+
+      // Get location-filtered user IDs if admin has location restrictions
+      let locationFilteredUserIds: string[] = [];
+      if (adminLocationFilter) {
+        let userQuery = supabase
+          .from('users')
+          .select('id')
+          .not('full_name', 'is', null)
+          .not('email', 'is', null);
+
+        // Apply location filters
+        if (adminLocationFilter.country) {
+          userQuery = userQuery.ilike('country', `%${adminLocationFilter.country}%`);
+        }
+        if (adminLocationFilter.city) {
+          userQuery = userQuery.ilike('city', `%${adminLocationFilter.city}%`);
+        }
+        if (adminLocationFilter.district) {
+          userQuery = userQuery.ilike('state', `%${adminLocationFilter.district}%`);
+        }
+        if (adminLocationFilter.zipcode) {
+          // For generated zipcodes, don't filter by zipcode field
+          if (!adminLocationFilter.zipcode.match(/^[A-Z]{3}\d{3}$/)) {
+            try {
+              userQuery = userQuery.eq('zipcode', adminLocationFilter.zipcode);
+            } catch (error) {
+              console.warn('Zipcode field filtering failed, using city/country only:', error);
+            }
+          }
+        }
+
+        const { data: locationUsers } = await userQuery;
+        locationFilteredUserIds = locationUsers?.map(u => u.id) || [];
+
+        if (locationFilteredUserIds.length === 0) {
+          console.log('No users found in admin location, showing empty feedback');
+          setFeedbacks([]);
+          setLoading(false);
+          return;
+        }
+      }
+
+      // Build feedback query with location filtering
+      let feedbackQuery = supabase
         .from('feedback')
-        .select('*')
+        .select('*');
+
+      if (adminLocationFilter && locationFilteredUserIds.length > 0) {
+        feedbackQuery = feedbackQuery.in('user_id', locationFilteredUserIds);
+      }
+
+      const { data: feedbackData, error: feedbackError } = await feedbackQuery
         .order('created_at', { ascending: false });
 
       console.log('Direct feedback query result:', { feedbackData, feedbackError });
 
-      // Get reviews with user information
-      const { data: reviewsData, error: reviewsError } = await supabase
+      // Build reviews query with location filtering
+      let reviewsQuery = supabase
         .from('reviews')
         .select(`
           *,
@@ -90,7 +149,13 @@ export function Feedback() {
             name,
             seller_name
           )
-        `)
+        `);
+
+      if (adminLocationFilter && locationFilteredUserIds.length > 0) {
+        reviewsQuery = reviewsQuery.in('user_id', locationFilteredUserIds);
+      }
+
+      const { data: reviewsData, error: reviewsError } = await reviewsQuery
         .order('created_at', { ascending: false });
 
       console.log('Direct reviews query result:', { reviewsData, reviewsError });
@@ -439,12 +504,21 @@ export function Feedback() {
   return (
     <div className="space-y-6">
       <div className="flex justify-between items-center">
-        {/* <div>
+        <div>
           <h2 className="text-2xl font-semibold text-gray-900">Feedback Management</h2>
-          <p className="text-sm text-gray-600 mt-1">
-            Showing {filteredFeedback.length} of {feedbacks.length} feedback items
-          </p>
-        </div> */}
+          <div className="flex items-center gap-4 mt-1">
+            <p className="text-sm text-gray-600">
+              Showing {filteredFeedback.length} of {feedbacks.length} feedback items
+            </p>
+            {adminLocation && (
+              <div className="text-xs bg-blue-50 text-blue-700 px-2 py-1 rounded-md border border-blue-200">
+                <span className="font-medium">Location Filter:</span> {adminLocation.country}
+                {adminLocation.city && ` → ${adminLocation.city}`}
+                {adminLocation.zipcode && ` → ${adminLocation.zipcode}`}
+              </div>
+            )}
+          </div>
+        </div>
         <div className="flex gap-2">
           <button
             onClick={fetchFeedback}
