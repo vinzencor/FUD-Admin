@@ -504,12 +504,21 @@ export function Feedback() {
   return (
     <div className="space-y-6">
       <div className="flex justify-between items-center">
-        {/* <div>
+        <div>
           <h2 className="text-2xl font-semibold text-gray-900">Feedback Management</h2>
-          <p className="text-sm text-gray-600 mt-1">
-            Showing {filteredFeedback.length} of {feedbacks.length} feedback items
-          </p>
-        </div> */}
+          <div className="flex items-center gap-4 mt-1">
+            <p className="text-sm text-gray-600">
+              Showing {filteredFeedback.length} of {feedbacks.length} feedback items
+            </p>
+            {adminLocation && (
+              <div className="text-xs bg-blue-50 text-blue-700 px-2 py-1 rounded-md border border-blue-200">
+                <span className="font-medium">Location Filter:</span> {adminLocation.country}
+                {adminLocation.city && ` → ${adminLocation.city}`}
+                {adminLocation.zipcode && ` → ${adminLocation.zipcode}`}
+              </div>
+            )}
+          </div>
+        </div>
         <div className="flex gap-2">
           <button
             onClick={fetchFeedback}
