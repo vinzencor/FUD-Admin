@@ -4,7 +4,7 @@ import { StatCard } from '../components/dashboard/StatCard';
 import { useAuthStore } from '../store/authStore';
 import { supabase } from '../supabaseClient';
 import { Link } from 'react-router-dom';
-import { fetchDashboardStats } from '../services/dataService';
+import { fetchDashboardStats, fetchRecentOrders as fetchRecentOrdersFromService } from '../services/dataService';
 import { getAdminAssignedLocation, AdminLocation } from '../services/locationAdminService';
 
 interface DashboardStats {
@@ -70,7 +70,7 @@ export function Dashboard() {
       setStats(statsData);
 
       // Fetch recent orders with location filtering
-      const orders = await fetchRecentOrders(adminLocationFilter);
+      const orders = await fetchRecentOrdersFromService(adminLocationFilter);
       setRecentOrders(orders);
     } catch (err) {
       console.error('Error fetching dashboard data:', err);
@@ -114,100 +114,7 @@ export function Dashboard() {
     }
   };
 
-  const fetchRecentOrders = async (adminLocationFilter?: AdminLocation | null): Promise<Order[]> => {
-    try {
-      // Use the database function for better performance and error handling
-      const { data, error } = await supabase.rpc('get_dashboard_stats');
 
-      if (error) throw error;
-
-      if (data && data.recent_interests && Array.isArray(data.recent_interests)) {
-        return data.recent_interests.map((interest: any) => ({
-          id: interest.id,
-          buyer: interest.buyer_name || 'Unknown Customer',
-          seller: interest.seller_name || 'Unknown Seller',
-          product: interest.product_name || 'Unknown Product',
-          status: interest.status,
-          created_at: interest.created_at
-        }));
-      }
-
-      // Fallback to direct query if function fails
-      let fallbackQuery = supabase
-        .from('interests')
-        .select(`
-          *,
-          listings!inner(
-            id,
-            name,
-            price,
-            seller_name,
-            type
-          ),
-          buyer:users!buyer_id(
-            id,
-            full_name,
-            email,
-            city,
-            state,
-            country
-          )
-        `);
-
-      // Apply location filtering for regional admins
-      if (adminLocationFilter) {
-        // Get location-filtered user IDs first
-        let userQuery = supabase
-          .from('users')
-          .select('id');
-
-        if (adminLocationFilter.country) {
-          userQuery = userQuery.ilike('country', `%${adminLocationFilter.country}%`);
-        }
-        if (adminLocationFilter.city) {
-          userQuery = userQuery.ilike('city', `%${adminLocationFilter.city}%`);
-        }
-        if (adminLocationFilter.district) {
-          userQuery = userQuery.ilike('state', `%${adminLocationFilter.district}%`);
-        }
-
-        const { data: locationUsers } = await userQuery;
-
-        if (locationUsers && locationUsers.length > 0) {
-          const userIds = locationUsers.map(u => u.id);
-          // Filter interests by buyer or seller location
-          fallbackQuery = fallbackQuery.or(`buyer_id.in.(${userIds.join(',')}),seller_id.in.(${userIds.join(',')})`);
-        } else {
-          // No users in the location, return empty array
-          return [];
-        }
-      }
-
-      const { data: fallbackData, error: fallbackError } = await fallbackQuery
-        .order('created_at', { ascending: false })
-        .limit(5);
-
-      if (fallbackError) throw fallbackError;
-
-      if (fallbackData && fallbackData.length > 0) {
-        return fallbackData.map((interest: any) => ({
-          id: interest.id,
-          buyer: interest.buyer?.full_name || interest.buyer?.email || 'Unknown Customer',
-          seller: interest.listings?.seller_name || 'Unknown Seller',
-          product: interest.listings?.name || 'Unknown Product',
-          status: interest.status,
-          created_at: interest.created_at
-        }));
-      }
-
-      // Return empty array if no interests found
-      return [];
-    } catch (error) {
-      console.error('Error fetching recent orders:', error);
-      // Return empty array if there's an error
-      return [];
-    }
-  };
 
   const getStatusBadgeColor = (status: string) => {
     switch (status) {
@@ -260,7 +167,7 @@ export function Dashboard() {
           </h2>
           {adminLocation ? (
             <div className="mt-2 text-sm text-blue-600 bg-blue-50 px-3 py-1 rounded-full inline-block">
-              📍 Viewing data for: {adminLocation.city}, {adminLocation.district}, {adminLocation.country}
+              📍 Viewing data for: {adminLocation.zipcode ? `Zipcode ${adminLocation.zipcode}, ` : ''}{adminLocation.city}, {adminLocation.district}, {adminLocation.country}
             </div>
           ) : user?.role === 'super_admin' ? (
             <div className="mt-2 text-sm text-purple-600 bg-purple-50 px-3 py-1 rounded-full inline-block">

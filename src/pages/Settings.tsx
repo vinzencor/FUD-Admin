@@ -267,6 +267,12 @@ export function Settings() {
                           <span className="text-blue-700">{adminLocation.city}</span>
                         </div>
                       )}
+                      {adminLocation.zipcode && (
+                        <div className="flex items-center gap-2 text-sm">
+                          <span className="font-medium text-blue-800">Zipcode/Pincode:</span>
+                          <span className="text-blue-700">{adminLocation.zipcode}</span>
+                        </div>
+                      )}
                       {adminLocation.streets && adminLocation.streets.length > 0 && (
                         <div className="flex items-start gap-2 text-sm">
                           <span className="font-medium text-blue-800">Streets:</span>

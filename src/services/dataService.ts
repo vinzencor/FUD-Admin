@@ -1,5 +1,67 @@
 import { supabase } from '../supabaseClient';
-import { AdminLocation, getLocationFilteredUserIds, hasLocationRestrictions } from './locationAdminService';
+import { AdminLocation } from './locationAdminService';
+
+/**
+ * Get user IDs that match the admin's location filter (including zipcode-level filtering)
+ * This is a centralized function to ensure consistent filtering across all data services
+ */
+async function getLocationFilteredUserIds(adminLocation?: AdminLocation | null): Promise<string[]> {
+  try {
+    if (!adminLocation) {
+      // No location filter, return empty array to indicate no filtering needed
+      return [];
+    }
+
+    let userQuery = supabase
+      .from('users')
+      .select('id')
+      .not('full_name', 'is', null)
+      .not('email', 'is', null);
+
+    // Apply location filters in order of specificity
+    if (adminLocation.country) {
+      userQuery = userQuery.ilike('country', `%${adminLocation.country}%`);
+    }
+    if (adminLocation.city) {
+      userQuery = userQuery.ilike('city', `%${adminLocation.city}%`);
+    }
+    if (adminLocation.district) {
+      userQuery = userQuery.ilike('state', `%${adminLocation.district}%`);
+    }
+
+    // Apply zipcode filtering (most specific)
+    if (adminLocation.zipcode) {
+      // For generated zipcodes (like "NYC001"), we don't filter by zipcode field
+      // since users don't have these values - city/country filtering is sufficient
+      if (!adminLocation.zipcode.match(/^[A-Z]{3}\d{3}$/)) {
+        // Real zipcode from database - try to filter by zipcode field
+        try {
+          userQuery = userQuery.eq('zipcode', adminLocation.zipcode);
+          console.log('Applied zipcode filter:', adminLocation.zipcode);
+        } catch (error) {
+          console.warn('Zipcode field filtering failed, using city/country only:', error);
+          // Continue with city/country filtering
+        }
+      } else {
+        console.log('Using generated zipcode, filtering by city/country only:', adminLocation.zipcode);
+      }
+    }
+
+    const { data: users, error } = await userQuery;
+
+    if (error) {
+      console.error('Error fetching location-filtered users:', error);
+      return [];
+    }
+
+    const userIds = users?.map(user => user.id) || [];
+    console.log(`Found ${userIds.length} users matching location filter:`, adminLocation);
+    return userIds;
+  } catch (error) {
+    console.error('Error in getLocationFilteredUserIds:', error);
+    return [];
+  }
+}
 
 /**
  * Data fetching services for admin panel
@@ -149,7 +211,7 @@ export async function fetchAllSellers(adminLocation?: AdminLocation | null): Pro
       .select('id, full_name, email, mobile_phone, city, state, country, created_at')
       .in('id', userIds);
 
-    // Apply location filter for regional admins with street-level granularity
+    // Apply location filter for regional admins with zipcode-level granularity
     if (adminLocation) {
       if (adminLocation.country) {
         userQuery = userQuery.ilike('country', `%${adminLocation.country}%`);
@@ -160,8 +222,18 @@ export async function fetchAllSellers(adminLocation?: AdminLocation | null): Pro
       if (adminLocation.district) {
         userQuery = userQuery.ilike('state', `%${adminLocation.district}%`); // Using state field as district
       }
-      // TODO: Add street-level filtering once we have proper address fields
-      // For now, the filtering is at district level which provides good granularity
+      if (adminLocation.zipcode) {
+        // For generated zipcodes (like "NYC001"), we need a different approach
+        if (adminLocation.zipcode.match(/^[A-Z]{3}\d{3}$/)) {
+          // This is a generated zipcode, so we don't filter by it since users don't have these values
+          // The filtering by country and city is sufficient for generated zipcodes
+          console.log('Using generated zipcode, filtering by city/country only');
+        } else {
+          // Real zipcode from database, filter by it
+          // Use a simpler approach to avoid or() syntax issues with special characters
+          userQuery = userQuery.eq('zipcode', adminLocation.zipcode);
+        }
+      }
     }
 
     const { data: users, error: userError } = await userQuery;
@@ -175,19 +247,30 @@ export async function fetchAllSellers(adminLocation?: AdminLocation | null): Pro
     });
 
     // Combine seller profiles with user data
-    return sellerProfiles.map(seller => {
-      const user = userMap.get(seller.user_id);
-      return {
-        ...seller,
-        user_name: user?.full_name,
-        user_email: user?.email,
-        user_phone: user?.mobile_phone,
-        user_city: user?.city,
-        user_state: user?.state,
-        user_country: user?.country,
-        user_created_at: user?.created_at
-      };
-    });
+    const result = sellerProfiles
+      .map(seller => {
+        const user = userMap.get(seller.user_id);
+        return {
+          ...seller,
+          user_name: user?.full_name,
+          user_email: user?.email,
+          user_phone: user?.mobile_phone,
+          user_city: user?.city,
+          user_state: user?.state,
+          user_country: user?.country,
+          user_created_at: user?.created_at
+        };
+      })
+      .filter(seller => {
+        // If location filtering is applied, only include sellers with user data (meaning they passed the location filter)
+        if (adminLocation) {
+          return !!seller.user_name; // Only include if user data exists (passed location filter)
+        }
+        return true; // No location filter, include all
+      });
+
+    console.log(`fetchAllSellers: Found ${result.length} sellers after zipcode filtering`);
+    return result;
   } catch (error) {
     console.error('Error fetching sellers:', error);
     throw error;
@@ -285,27 +368,30 @@ export async function fetchFarmerRevenueData(adminLocation?: AdminLocation | nul
       // Continue without seller profiles if they don't exist
     }
 
-    // Step 3: Get all users (sellers) with location filtering
+    // Step 3: Get location-filtered user IDs and filter sellers
+    const locationFilteredUserIds = await getLocationFilteredUserIds(adminLocation);
     const sellerIds = [...new Set(allInterests.map(interest => interest.seller_id))];
-    let sellersQuery = supabase
-      .from('users')
-      .select('id, full_name, email, city, state, country')
-      .in('id', sellerIds);
 
-    // Apply location filtering for regional admins
-    if (adminLocation) {
-      if (adminLocation.country) {
-        sellersQuery = sellersQuery.ilike('country', `%${adminLocation.country}%`);
-      }
-      if (adminLocation.city) {
-        sellersQuery = sellersQuery.ilike('city', `%${adminLocation.city}%`);
-      }
-      if (adminLocation.district) {
-        sellersQuery = sellersQuery.ilike('state', `%${adminLocation.district}%`);
-      }
+    // Apply location filtering to seller IDs
+    let filteredSellerIds = sellerIds;
+    if (adminLocation && locationFilteredUserIds.length > 0) {
+      // Only include sellers that are in the location-filtered user IDs
+      filteredSellerIds = sellerIds.filter(sellerId => locationFilteredUserIds.includes(sellerId));
+    } else if (adminLocation && locationFilteredUserIds.length === 0) {
+      // Admin has location restrictions but no users match - return empty
+      return [];
     }
 
-    const { data: sellers, error: sellersError } = await sellersQuery;
+    if (filteredSellerIds.length === 0) {
+      console.log('No sellers found in the specified location');
+      return [];
+    }
+
+    // Get seller user data
+    const { data: sellers, error: sellersError } = await supabase
+      .from('users')
+      .select('id, full_name, email, city, state, country')
+      .in('id', filteredSellerIds);
 
     if (sellersError) {
       console.error('Error fetching sellers:', sellersError);
@@ -988,6 +1074,20 @@ export async function fetchUsersInLocation(location: AdminLocation): Promise<Use
  */
 export async function fetchDashboardStats(adminLocation?: AdminLocation | null) {
   try {
+    // Get location-filtered user IDs if admin has location restrictions
+    const locationFilteredUserIds = await getLocationFilteredUserIds(adminLocation);
+
+    if (adminLocation && locationFilteredUserIds.length === 0) {
+      // Admin has location restrictions but no users match - return zero counts
+      return {
+        members: 0,
+        farmers: 0,
+        orders: 0,
+        feedback: 0,
+        reports: 0
+      };
+    }
+
     // Build queries with location filtering if provided
     let usersQuery = supabase.from('users').select('*', { count: 'exact', head: true });
     let sellersQuery = supabase.from('seller_profiles').select('*', { count: 'exact', head: true });
@@ -995,48 +1095,20 @@ export async function fetchDashboardStats(adminLocation?: AdminLocation | null) 
     let feedbackQuery = supabase.from('feedback').select('*', { count: 'exact', head: true });
     let reviewsQuery = supabase.from('reviews').select('*', { count: 'exact', head: true });
 
-    // Apply location filtering for regional admins
-    if (adminLocation) {
-      // Filter users by location
-      if (adminLocation.country) {
-        usersQuery = usersQuery.ilike('country', `%${adminLocation.country}%`);
-      }
-      if (adminLocation.city) {
-        usersQuery = usersQuery.ilike('city', `%${adminLocation.city}%`);
-      }
-      if (adminLocation.district) {
-        usersQuery = usersQuery.ilike('state', `%${adminLocation.district}%`);
-      }
+    // Apply location filtering for regional admins using the filtered user IDs
+    if (adminLocation && locationFilteredUserIds.length > 0) {
+      // Filter users by the location-filtered IDs
+      usersQuery = usersQuery.in('id', locationFilteredUserIds);
 
-      // For seller profiles, we need to filter by user location
-      // First get location-filtered user IDs, then filter seller profiles
-      const { data: locationUsers } = await supabase
-        .from('users')
-        .select('id')
-        .ilike('country', adminLocation.country ? `%${adminLocation.country}%` : '%')
-        .ilike('city', adminLocation.city ? `%${adminLocation.city}%` : '%')
-        .ilike('state', adminLocation.district ? `%${adminLocation.district}%` : '%');
+      // Filter seller profiles by user location
+      sellersQuery = sellersQuery.in('user_id', locationFilteredUserIds);
 
-      if (locationUsers && locationUsers.length > 0) {
-        const userIds = locationUsers.map(u => u.id);
-        sellersQuery = sellersQuery.in('user_id', userIds);
+      // Filter interests by buyer or seller location
+      interestsQuery = interestsQuery.or(`buyer_id.in.(${locationFilteredUserIds.join(',')}),seller_id.in.(${locationFilteredUserIds.join(',')})`);
 
-        // Filter interests by buyer or seller location
-        interestsQuery = interestsQuery.or(`buyer_id.in.(${userIds.join(',')}),seller_id.in.(${userIds.join(',')})`);
-
-        // Filter feedback and reviews by user location
-        feedbackQuery = feedbackQuery.in('user_id', userIds);
-        reviewsQuery = reviewsQuery.in('user_id', userIds);
-      } else {
-        // No users in the location, return zero counts
-        return {
-          members: 0,
-          farmers: 0,
-          orders: 0,
-          feedback: 0,
-          reports: 0
-        };
-      }
+      // Filter feedback and reviews by user location
+      feedbackQuery = feedbackQuery.in('user_id', locationFilteredUserIds);
+      reviewsQuery = reviewsQuery.in('user_id', locationFilteredUserIds);
     }
 
     const [usersCount, sellersCount, interestsCount, feedbackCount, reviewsCount] = await Promise.all([
@@ -1057,5 +1129,75 @@ export async function fetchDashboardStats(adminLocation?: AdminLocation | null) 
   } catch (error) {
     console.error('Error fetching dashboard stats:', error);
     throw error;
+  }
+}
+
+/**
+ * Fetch recent orders with location filtering for dashboard
+ */
+export async function fetchRecentOrders(adminLocation?: AdminLocation | null): Promise<any[]> {
+  try {
+    // Get location-filtered user IDs if admin has location restrictions
+    const locationFilteredUserIds = await getLocationFilteredUserIds(adminLocation);
+
+    if (adminLocation && locationFilteredUserIds.length === 0) {
+      // Admin has location restrictions but no users match - return empty
+      return [];
+    }
+
+    // Build interests query with location filtering
+    let interestsQuery = supabase
+      .from('interests')
+      .select(`
+        *,
+        listings!inner(
+          id,
+          name,
+          price,
+          seller_name,
+          type
+        ),
+        buyer:users!buyer_id(
+          id,
+          full_name,
+          email,
+          city,
+          state,
+          country
+        )
+      `);
+
+    // Apply location filtering for regional admins using the filtered user IDs
+    if (adminLocation && locationFilteredUserIds.length > 0) {
+      // Filter interests by buyer or seller location
+      interestsQuery = interestsQuery.or(`buyer_id.in.(${locationFilteredUserIds.join(',')}),seller_id.in.(${locationFilteredUserIds.join(',')})`);
+    }
+
+    const { data: interests, error } = await interestsQuery
+      .order('created_at', { ascending: false })
+      .limit(5);
+
+    if (error) {
+      console.error('Error fetching recent orders:', error);
+      return [];
+    }
+
+    if (!interests || interests.length === 0) {
+      return [];
+    }
+
+    // Transform the data to match the expected Dashboard format
+    return interests.map((interest: any) => ({
+      id: interest.id,
+      buyer: interest.buyer?.full_name || interest.buyer?.email || 'Unknown Customer',
+      seller: interest.listings?.seller_name || 'Unknown Seller',
+      product: interest.listings?.name || 'Unknown Product',
+      status: interest.status || 'pending',
+      created_at: interest.created_at
+    }));
+
+  } catch (error) {
+    console.error('Error in fetchRecentOrders:', error);
+    return [];
   }
 }
