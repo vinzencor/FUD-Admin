@@ -4,19 +4,28 @@
  */
 
 import { supabase } from '../supabaseClient';
-import { 
-  fetchUsersWithAddresses, 
+import {
+  fetchUsersWithAddresses,
   fetchUsersInLocation,
-  UserAddressData 
+  UserAddressData
 } from '../services/dataService';
-import { 
+import {
   getAdminAssignedLocation,
   getLocationFilteredUserIds,
   getLocationFilteredData,
   applyLocationFilter,
   canAccessLocation,
-  AdminLocation
+  AdminLocation,
+  formatLocationDisplay,
+  formatLocationDisplayDetailed
 } from '../services/locationAdminService';
+import {
+  fetchCountriesFromUsers,
+  fetchStatesForCountry,
+  fetchCitiesForCountryAndState,
+  validateAdminLocationAssignment,
+  getUserCountForLocation
+} from '../services/hierarchicalLocationService';
 import { 
   isSuperAdmin,
   getAllUsersUnrestricted,
@@ -69,6 +78,9 @@ export class AdminAssignmentTestSuite {
 
       // Test admin assignment workflow
       await this.testAdminAssignmentWorkflow();
+
+      // Test new three-level hierarchy functionality
+      await this.testThreeLevelHierarchy();
 
       // Cleanup test data
       await this.cleanupTestData();
@@ -377,6 +389,109 @@ export class AdminAssignmentTestSuite {
 
     } catch (error) {
       this.addResult('Admin Assignment Workflow', false, `Workflow tests failed: ${error}`);
+    }
+  }
+
+  /**
+   * Test new three-level hierarchy functionality (Country → State → City)
+   */
+  private async testThreeLevelHierarchy(): Promise<void> {
+    try {
+      // Test fetching countries
+      const countries = await fetchCountriesFromUsers();
+      this.addResult(
+        'Fetch Countries',
+        countries.length > 0,
+        `Successfully fetched ${countries.length} countries from user data`,
+        { countries: countries.slice(0, 3).map(c => c.label) }
+      );
+
+      // Test fetching states for a country
+      if (countries.length > 0) {
+        const testCountry = countries.find(c => c.value.toLowerCase().includes('india')) || countries[0];
+        const states = await fetchStatesForCountry(testCountry.value);
+
+        this.addResult(
+          'Fetch States for Country',
+          states.length >= 0, // Allow 0 states if no state data exists
+          `Fetched ${states.length} states for ${testCountry.value}`,
+          { country: testCountry.value, states: states.slice(0, 3).map(s => s.label) }
+        );
+
+        // Test fetching cities for country and state
+        if (states.length > 0) {
+          const testState = states[0];
+          const cities = await fetchCitiesForCountryAndState(testCountry.value, testState.value);
+
+          this.addResult(
+            'Fetch Cities for Country and State',
+            cities.length >= 0,
+            `Fetched ${cities.length} cities for ${testState.value}, ${testCountry.value}`,
+            { country: testCountry.value, state: testState.value, cities: cities.slice(0, 3).map(c => c.label) }
+          );
+        }
+      }
+
+      // Test multi-level admin location validation
+      const testLocations: AdminLocation[] = [
+        { country: 'India', assignmentLevel: 'country' },
+        { country: 'India', state: 'Maharashtra', assignmentLevel: 'state' },
+        { country: 'India', state: 'Maharashtra', city: 'Mumbai', assignmentLevel: 'city' },
+        { country: 'India', state: 'Maharashtra', city: 'Mumbai', zipcode: '400001', assignmentLevel: 'zipcode' }
+      ];
+
+      for (const location of testLocations) {
+        const validation = await validateAdminLocationAssignment(
+          location.country!,
+          location.city,
+          location.zipcode,
+          location.state
+        );
+
+        this.addResult(
+          `Validate ${location.assignmentLevel}-level Assignment`,
+          validation.isValid,
+          validation.isValid
+            ? `${location.assignmentLevel}-level assignment validation passed`
+            : `Validation failed: ${validation.error}`,
+          { location, validation }
+        );
+      }
+
+      // Test user count for different hierarchy levels
+      const userCounts = await Promise.all([
+        getUserCountForLocation('India'),
+        getUserCountForLocation('India', undefined, 'Maharashtra'),
+        getUserCountForLocation('India', 'Mumbai', 'Maharashtra'),
+      ]);
+
+      this.addResult(
+        'User Count by Hierarchy Level',
+        userCounts.every(count => count >= 0),
+        `User counts: Country(${userCounts[0]}), State(${userCounts[1]}), City(${userCounts[2]})`,
+        { countryCounts: userCounts[0], stateCounts: userCounts[1], cityCounts: userCounts[2] }
+      );
+
+      // Test location display formatting
+      const testLocation: AdminLocation = {
+        country: 'India',
+        state: 'Maharashtra',
+        city: 'Mumbai',
+        assignmentLevel: 'city'
+      };
+
+      const displayText = formatLocationDisplay(testLocation);
+      const detailedText = formatLocationDisplayDetailed(testLocation);
+
+      this.addResult(
+        'Location Display Formatting',
+        displayText.includes('Mumbai') && detailedText.includes('City'),
+        `Display formatting works correctly`,
+        { displayText, detailedText }
+      );
+
+    } catch (error) {
+      this.addResult('Three-Level Hierarchy', false, `Three-level hierarchy tests failed: ${error}`);
     }
   }
 

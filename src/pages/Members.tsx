@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
-import { Search, MoreVertical, CheckCircle, XCircle, AlertTriangle, Edit, Trash2, Crown, Store, Download } from 'lucide-react';
+import { Search, MoreVertical, Edit, Trash2, Crown, Store, Download, AlertTriangle, CheckCircle, Star } from 'lucide-react';
 import { format, addMonths } from 'date-fns';
-import { Badge } from '../components/ui/badge';
+
 import { Button } from '../components/ui/button';
 import {
   Dialog,
@@ -15,6 +15,7 @@ import { supabase } from '../supabaseClient';
 import { updateUserRole, roleLabels, roleDescriptions } from '../utils/roleManagement';
 import { exportWithLoading, generateFilename, formatDateForExport, formatBooleanForExport, EXPORT_COLUMNS } from '../utils/exportUtils';
 import { AdminLocationModal } from '../components/admin/AdminLocationModal';
+import { UserProfileModal } from '../components/shared/UserProfileModal';
 import {
   getAdminAssignedLocation,
   formatLocationDisplay,
@@ -45,30 +46,79 @@ interface Member {
 export function Members() {
   const navigate = useNavigate();
   const user = useAuthStore((state) => state.user);
-  const [status, setStatus] = useState<'all' | 'active' | 'suspended'>('all');
+
   const [userTypeFilter, setUserTypeFilter] = useState<'all' | 'buyer' | 'seller' | 'both'>('all');
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedMember, setSelectedMember] = useState<Member | null>(null);
   const [showUpgradeModal, setShowUpgradeModal] = useState(false);
   const [members, setMembers] = useState<Member[]>([]);
   const [loading, setLoading] = useState(true);
-  const [showEditModal, setShowEditModal] = useState(false);
+  const [showProfileModal, setShowProfileModal] = useState(false);
   const [showRoleModal, setShowRoleModal] = useState(false);
   const [expandedRowId, setExpandedRowId] = useState<string | null>(null);
-  const [editForm, setEditForm] = useState({
-    name: '',
-    email: '',
-    phone: '',
-    city: '',
-    state: '',
-  });
   const [selectedRole, setSelectedRole] = useState<'user' | 'admin' | 'super_admin'>('user');
   const [exporting, setExporting] = useState(false);
   const [exportMessage, setExportMessage] = useState<string | null>(null);
   const [showAdminLocationModal, setShowAdminLocationModal] = useState(false);
   const [adminLocationModalMode, setAdminLocationModalMode] = useState<'promote' | 'edit'>('promote');
   const [selectedMemberForAdmin, setSelectedMemberForAdmin] = useState<Member | null>(null);
+  const [featuredSellers, setFeaturedSellers] = useState<Set<string>>(new Set());
+  const [processingFeatured, setProcessingFeatured] = useState<string | null>(null);
 
+
+  // Load featured sellers
+  const loadFeaturedSellers = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('featured_sellers')
+        .select('user_id')
+        .eq('is_active', true);
+
+      if (error) throw error;
+
+      const featuredUserIds = new Set(data?.map(fs => fs.user_id) || []);
+      setFeaturedSellers(featuredUserIds);
+    } catch (error) {
+      console.error('Error loading featured sellers:', error);
+    }
+  };
+
+  // Toggle featured seller status
+  const toggleFeaturedStatus = async (userId: string, userName: string) => {
+    if (!user?.id) return;
+
+    try {
+      setProcessingFeatured(userId);
+
+      const { data, error } = await supabase.rpc('toggle_featured_seller', {
+        p_user_id: userId,
+        p_admin_id: user.id,
+        p_notes: `Featured/unfeatured by ${user.email} from Members section`
+      });
+
+      if (error) throw error;
+
+      if (data?.success) {
+        // Update local state
+        const newFeaturedSellers = new Set(featuredSellers);
+        if (data.action === 'featured') {
+          newFeaturedSellers.add(userId);
+          alert(`${userName} has been added to featured sellers!`);
+        } else {
+          newFeaturedSellers.delete(userId);
+          alert(`${userName} has been removed from featured sellers.`);
+        }
+        setFeaturedSellers(newFeaturedSellers);
+      } else {
+        alert(data?.message || 'Failed to update featured status');
+      }
+    } catch (error) {
+      console.error('Error toggling featured status:', error);
+      alert('Failed to update featured status');
+    } finally {
+      setProcessingFeatured(null);
+    }
+  };
 
   useEffect(() => {
     const fetchMembers = async () => {
@@ -180,25 +230,13 @@ export function Members() {
     };
 
     fetchMembers();
+    loadFeaturedSellers();
   }, [user?.role]);
 
 
-  const getStatusIcon = (status: Member['status']) => {
-    switch (status) {
-      case 'active':
-        return <CheckCircle className="h-4 w-4 text-green-500" />;
-      case 'suspended':
-        return <XCircle className="h-4 w-4 text-red-500" />;
-      default:
-        return <AlertTriangle className="h-4 w-4 text-yellow-500" />;
-    }
-  };
 
-  const handleStatusChange = (memberId: string, newStatus: Member['status']) => {
-    setMembers(members.map(member =>
-      member.id === memberId ? { ...member, status: newStatus } : member
-    ));
-  };
+
+
 
   const handleUpgradeToPMA = (e: React.FormEvent) => {
     e.preventDefault();
@@ -227,8 +265,6 @@ export function Members() {
   };
 
   const filteredMembers = members.filter(member => {
-    const matchesStatus = status === 'all' || member.status === status;
-
     const matchesUserType = userTypeFilter === 'all' ||
       (userTypeFilter === 'buyer' && !member.isSeller && member.defaultMode === 'buyer') ||
       (userTypeFilter === 'seller' && member.isSeller && member.defaultMode !== 'buyer') ||
@@ -241,7 +277,7 @@ export function Members() {
       member.location.toLowerCase().includes(searchTerm.toLowerCase()) ||
       (member.sellerInfo?.storeName && member.sellerInfo.storeName.toLowerCase().includes(searchTerm.toLowerCase()));
 
-    return matchesStatus && matchesUserType && matchesSearch;
+    return matchesUserType && matchesSearch;
   });
 
   const handleDeleteMember = async (memberId: string) => {
@@ -281,31 +317,7 @@ export function Members() {
     // Refresh the members list
     window.location.reload();
   };
-  const handleSaveEdits = async (updatedMember: Member) => {
-    // Only super admin can edit members
-    if (user?.role !== 'super_admin') {
-      alert('Only Super Admins can edit member details.');
-      return;
-    }
 
-    const { error } = await supabase
-      .from('users')
-      .update({
-        full_name: updatedMember.name,
-        mobile_phone: updatedMember.phone,
-        city: updatedMember.location.split(',')[0]?.trim(),
-        state: updatedMember.location.split(',')[1]?.trim(),
-      })
-      .eq('id', updatedMember.id);
-
-    if (!error) {
-      setMembers(members.map(m => m.id === updatedMember.id ? updatedMember : m));
-      alert('Member updated successfully.');
-    } else {
-      console.error('Error updating member:', error);
-      alert('Update failed.');
-    }
-  };
 
   const handleRoleChange = async (memberId: string, newRole: 'user' | 'admin' | 'super_admin') => {
     try {
@@ -391,15 +403,7 @@ export function Members() {
     }
   };
 
-  const getSellerStatus = (member: Member) => {
-    if (!member.isSeller) return null;
 
-    if (member.sellerInfo?.isApproved) {
-      return { label: 'Approved', color: 'bg-green-100 text-green-800' };
-    } else {
-      return { label: 'Pending', color: 'bg-yellow-100 text-yellow-800' };
-    }
-  };
 
   const handleExportMembers = async () => {
     const filename = generateFilename('members');
@@ -546,15 +550,7 @@ export function Members() {
                 <option value="seller">Sellers Only</option>
                 <option value="both">Buyer & Seller</option>
               </select>
-              <select
-                value={status}
-                onChange={(e) => setStatus(e.target.value as typeof status)}
-                className="flex-1 px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent"
-              >
-                <option value="all">All Status</option>
-                <option value="active">Active</option>
-                <option value="suspended">Suspended</option>
-              </select>
+
             </div>
           </div>
         </div>
@@ -570,7 +566,7 @@ export function Members() {
               </div>
               <h3 className="text-sm font-medium text-gray-900 mb-1">No members found</h3>
               <p className="text-xs text-gray-500 text-center">
-                {searchTerm || userTypeFilter !== 'all' || status !== 'all'
+                {searchTerm || userTypeFilter !== 'all'
                   ? 'Try adjusting your search or filters'
                   : 'No members have been added yet'
                 }
@@ -588,15 +584,7 @@ export function Members() {
                     <h3 className="font-medium text-gray-900 text-sm">{member.name}</h3>
                     <p className="text-xs text-gray-500 mt-1">{member.email}</p>
                   </div>
-                  <div className="flex items-center gap-2">
-                    {getStatusIcon(member.status)}
-                    <Badge
-                      variant={member.status === 'active' ? 'success' : 'danger'}
-                      className="capitalize text-xs"
-                    >
-                      {member.status}
-                    </Badge>
-                  </div>
+
                 </div>
 
                 <div className="grid grid-cols-1 gap-2 text-xs">
@@ -652,20 +640,32 @@ export function Members() {
                       size="sm"
                       onClick={() => {
                         setSelectedMember(member);
-                        const [city, state] = member.location.split(',').map((s) => s.trim());
-                        setEditForm({
-                          name: member.name,
-                          email: member.email,
-                          phone: member.phone,
-                          city: city || '',
-                          state: state || '',
-                        });
-                        setShowEditModal(true);
+                        setShowProfileModal(true);
                       }}
                       className="flex items-center gap-1 text-xs"
                     >
                       <Edit className="h-3 w-3" />
-                      Edit
+                      View Profile
+                    </Button>
+
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => toggleFeaturedStatus(member.id, member.name)}
+                      disabled={processingFeatured === member.id}
+                      className={`flex items-center gap-1 text-xs ${
+                        featuredSellers.has(member.id)
+                          ? 'text-yellow-600 hover:text-yellow-700 border-yellow-300'
+                          : 'text-blue-600 hover:text-blue-700'
+                      }`}
+                    >
+                      <Star className={`h-3 w-3 ${featuredSellers.has(member.id) ? 'fill-current' : ''}`} />
+                      {processingFeatured === member.id
+                        ? 'Processing...'
+                        : featuredSellers.has(member.id)
+                          ? 'Remove Featured'
+                          : 'Add Featured'
+                      }
                     </Button>
 
                     {member.role === 'user' && (
@@ -676,7 +676,7 @@ export function Members() {
                         className="flex items-center gap-1 text-purple-600 hover:text-purple-700 text-xs"
                       >
                         <Crown className="h-3 w-3" />
-                        Promote to Admin
+                        Promote to Regional Admin
                       </Button>
                     )}
 
@@ -734,7 +734,7 @@ export function Members() {
               </div>
               <h3 className="text-lg font-medium text-gray-900 mb-2">No members found</h3>
               <p className="text-sm text-gray-500 text-center max-w-sm">
-                {searchTerm || userTypeFilter !== 'all' || status !== 'all'
+                {searchTerm || userTypeFilter !== 'all'
                   ? 'Try adjusting your search or filters to find members'
                   : 'No members have been added to the system yet'
                 }
@@ -760,9 +760,7 @@ export function Members() {
                     <th className="px-6 py-3 text-left">
                       <div className="text-xs font-medium text-gray-500 uppercase tracking-wider">Role</div>
                     </th>
-                    <th className="px-6 py-3 text-left">
-                      <div className="text-xs font-medium text-gray-500 uppercase tracking-wider">Status</div>
-                    </th>
+
                     <th className="px-6 py-3 text-left">
                       <div className="text-xs font-medium text-gray-500 uppercase tracking-wider">Join Date</div>
                     </th>
@@ -815,17 +813,7 @@ export function Members() {
                       {getRoleLabel(member.role ?? '')}
                     </span>
                   </td>
-                  <td className="px-6 py-4">
-                    <div className="flex items-center gap-2">
-                      {getStatusIcon(member.status)}
-                      <Badge
-                        variant={member.status === 'active' ? 'success' : 'danger'}
-                        className="capitalize"
-                      >
-                        {member.status}
-                      </Badge>
-                    </div>
-                  </td>
+
                   <td className="px-6 py-4">
                     <div className="text-sm text-gray-900">
                       {format(new Date(member.joinDate), 'MMM d, yyyy')}
@@ -848,20 +836,32 @@ export function Members() {
                             size="sm"
                             onClick={() => {
                               setSelectedMember(member);
-                              const [city, state] = member.location.split(',').map((s) => s.trim());
-                              setEditForm({
-                                name: member.name,
-                                email: member.email,
-                                phone: member.phone,
-                                city: city || '',
-                                state: state || '',
-                              });
-                              setShowEditModal(true);
+                              setShowProfileModal(true);
                             }}
                             className="flex items-center gap-1"
                           >
                             <Edit className="h-3 w-3" />
-                            Edit
+                            View Profile
+                          </Button>
+
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => toggleFeaturedStatus(member.id, member.name)}
+                            disabled={processingFeatured === member.id}
+                            className={`flex items-center gap-1 ${
+                              featuredSellers.has(member.id)
+                                ? 'text-yellow-600 hover:text-yellow-700 border-yellow-300'
+                                : 'text-blue-600 hover:text-blue-700'
+                            }`}
+                          >
+                            <Star className={`h-3 w-3 ${featuredSellers.has(member.id) ? 'fill-current' : ''}`} />
+                            {processingFeatured === member.id
+                              ? 'Processing...'
+                              : featuredSellers.has(member.id)
+                                ? 'Remove Featured'
+                                : 'Add Featured'
+                            }
                           </Button>
 
                           {member.role === 'user' && (
@@ -872,7 +872,7 @@ export function Members() {
                               className="flex items-center gap-1 text-purple-600 hover:text-purple-700"
                             >
                               <Crown className="h-3 w-3" />
-                              Promote to Admin
+                              Promote to Regional Admin
                             </Button>
                           )}
 
@@ -1018,99 +1018,7 @@ export function Members() {
         </DialogContent>
       </Dialog>
 
-      <Dialog open={showEditModal} onOpenChange={setShowEditModal}>
-        <DialogContent>
-          <DialogHeader>
-            <h3 className="text-lg font-semibold">Edit Member Details</h3>
-          </DialogHeader>
-          {selectedMember && (
-            <form
-              onSubmit={async (e) => {
-                e.preventDefault();
-                const updatedMember: Member = {
-                  ...selectedMember,
-                  name: editForm.name,
-                  email: editForm.email,
-                  phone: editForm.phone,
-                  location: `${editForm.city}, ${editForm.state}`,
-                  joinDate: selectedMember.joinDate,
-                  lastActive: selectedMember.lastActive,
-                  status: selectedMember.status,
-                  id: selectedMember.id,
-                };
 
-                await handleSaveEdits(updatedMember);
-                setShowEditModal(false);
-              }}
-              className="space-y-4"
-            >
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Full Name</label>
-                <input
-                  type="text"
-                  value={editForm.name}
-                  onChange={(e) => setEditForm({ ...editForm, name: e.target.value })}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md"
-                  required
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
-                <input
-                  type="email"
-                  value={editForm.email}
-                  onChange={(e) => setEditForm({ ...editForm, email: e.target.value })}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md"
-                  required
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Phone</label>
-                <input
-                  type="text"
-                  value={editForm.phone}
-                  onChange={(e) => setEditForm({ ...editForm, phone: e.target.value })}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md"
-                />
-              </div>
-
-              <div className="flex flex-col sm:flex-row gap-4">
-                <div className="flex-1">
-                  <label className="block text-sm font-medium text-gray-700 mb-1">City</label>
-                  <input
-                    type="text"
-                    value={editForm.city}
-                    onChange={(e) => setEditForm({ ...editForm, city: e.target.value })}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md"
-                  />
-                </div>
-                <div className="flex-1">
-                  <label className="block text-sm font-medium text-gray-700 mb-1">State</label>
-                  <input
-                    type="text"
-                    value={editForm.state}
-                    onChange={(e) => setEditForm({ ...editForm, state: e.target.value })}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md"
-                  />
-                </div>
-              </div>
-
-              <DialogFooter>
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={() => setShowEditModal(false)}
-                >
-                  Cancel
-                </Button>
-                <Button type="submit">Save Changes</Button>
-              </DialogFooter>
-            </form>
-          )}
-        </DialogContent>
-      </Dialog>
 
       {/* Role Assignment Modal */}
       <Dialog open={showRoleModal} onOpenChange={setShowRoleModal}>
@@ -1253,6 +1161,27 @@ export function Members() {
           mode={adminLocationModalMode}
         />
       )}
+
+      {/* User Profile Modal */}
+      <UserProfileModal
+        isOpen={showProfileModal}
+        onClose={() => setShowProfileModal(false)}
+        user={selectedMember ? {
+          id: selectedMember.id,
+          name: selectedMember.name,
+          email: selectedMember.email,
+          phone: selectedMember.phone,
+          defaultMode: selectedMember.defaultMode,
+          role: selectedMember.role,
+          location: selectedMember.location,
+          registrationDate: selectedMember.joinDate,
+          lastActive: selectedMember.lastActive,
+          store_name: selectedMember.sellerInfo?.storeName,
+          is_approved: selectedMember.sellerInfo?.isApproved
+        } : null}
+        title="Member Profile"
+      />
+
     </div>
   );
 }

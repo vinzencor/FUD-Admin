@@ -223,6 +223,113 @@ export async function fetchCitiesForCountry(country: string): Promise<LocationOp
 }
 
 /**
+ * Fetch states for a specific country from actual user data
+ * Only returns states where registered users exist in the specified country
+ */
+export async function fetchStatesForCountry(country: string): Promise<LocationOption[]> {
+  try {
+    if (!country) return [];
+
+    const { data, error } = await supabase
+      .from('users')
+      .select('state')
+      .ilike('country', `%${country}%`)
+      .not('state', 'is', null)
+      .not('state', 'eq', '')
+      .not('full_name', 'is', null) // Only include users with names (real users)
+      .not('email', 'is', null); // Only include users with emails
+
+    if (error) {
+      console.error('Error fetching states:', error);
+      return [];
+    }
+
+    if (!data || data.length === 0) {
+      return [];
+    }
+
+    // Count users per state and create options
+    const stateMap = new Map<string, number>();
+    data.forEach(user => {
+      if (user.state) {
+        const state = user.state.trim();
+        stateMap.set(state, (stateMap.get(state) || 0) + 1);
+      }
+    });
+
+    // Convert to options array and sort by name
+    return Array.from(stateMap.entries())
+      .map(([state, count]) => ({
+        value: state,
+        label: `${state} (${count} users)`,
+        count
+      }))
+      .sort((a, b) => a.value.localeCompare(b.value));
+
+  } catch (error) {
+    console.error('Error in fetchStatesForCountry:', error);
+    return [];
+  }
+}
+
+/**
+ * Fetch cities for a specific country and state from actual user data
+ * Only returns cities where registered users exist in the specified country and state
+ */
+export async function fetchCitiesForCountryAndState(country: string, state?: string): Promise<LocationOption[]> {
+  try {
+    if (!country) return [];
+
+    let query = supabase
+      .from('users')
+      .select('city')
+      .ilike('country', `%${country}%`)
+      .not('city', 'is', null)
+      .not('city', 'eq', '')
+      .not('full_name', 'is', null) // Only include users with names (real users)
+      .not('email', 'is', null); // Only include users with emails
+
+    // Add state filter if provided
+    if (state) {
+      query = query.ilike('state', `%${state}%`);
+    }
+
+    const { data, error } = await query;
+
+    if (error) {
+      console.error('Error fetching cities:', error);
+      return [];
+    }
+
+    if (!data || data.length === 0) {
+      return [];
+    }
+
+    // Count users per city and create options
+    const cityMap = new Map<string, number>();
+    data.forEach(user => {
+      if (user.city) {
+        const city = user.city.trim();
+        cityMap.set(city, (cityMap.get(city) || 0) + 1);
+      }
+    });
+
+    // Convert to options array and sort by name
+    return Array.from(cityMap.entries())
+      .map(([city, count]) => ({
+        value: city,
+        label: `${city} (${count} users)`,
+        count
+      }))
+      .sort((a, b) => a.value.localeCompare(b.value));
+
+  } catch (error) {
+    console.error('Error in fetchCitiesForCountryAndState:', error);
+    return [];
+  }
+}
+
+/**
  * Fetch zipcodes for a specific country and city from actual user data
  * Only returns zipcodes where registered users exist in the specified location
  * Excludes zipcodes already assigned to active admins
@@ -532,13 +639,13 @@ export async function fetchHierarchicalLocationData(
 export async function getUserCountForLocation(
   country?: string,
   city?: string,
+  state?: string,
   zipcode?: string
 ): Promise<number> {
   try {
-    console.log('getUserCountForLocation called with:', { country, city, zipcode });
+    console.log('getUserCountForLocation called with:', { country, state, city, zipcode });
 
-    // For now, let's simplify and just count users by city and country
-    // The zipcode validation can be added later once we confirm the database schema
+    // Count users by hierarchical location: Country → State → City → Zipcode
     let query = supabase
       .from('users')
       .select('id', { count: 'exact', head: true })
@@ -547,6 +654,9 @@ export async function getUserCountForLocation(
 
     if (country) {
       query = query.ilike('country', `%${country}%`);
+    }
+    if (state) {
+      query = query.ilike('state', `%${state}%`);
     }
     if (city) {
       query = query.ilike('city', `%${city}%`);
@@ -577,13 +687,15 @@ export async function getUserCountForLocation(
 /**
  * Validate if a location combination has users
  * Returns true if there are users in the specified location
+ * Supports hierarchical validation: Country → State → City → Zipcode
  */
 export async function validateLocationHasUsers(
   country?: string,
   city?: string,
+  state?: string,
   zipcode?: string
 ): Promise<boolean> {
-  const count = await getUserCountForLocation(country, city, zipcode);
+  const count = await getUserCountForLocation(country, city, state, zipcode);
   return count > 0;
 }
 
@@ -660,42 +772,87 @@ export async function getZipcodeAssignedAdmin(
 
 /**
  * Validate a complete admin location assignment
- * Checks both user existence and zipcode availability
+ * Supports multi-level validation: Country → State → City → Zipcode
  */
 export async function validateAdminLocationAssignment(
   country: string,
-  city: string,
-  zipcode: string,
+  city?: string,
+  zipcode?: string,
+  state?: string,
   excludeAdminId?: string
 ): Promise<{ isValid: boolean; error?: string; assignedTo?: { id: string; name: string; email: string } }> {
   try {
-    // Validate input parameters
-    if (!country || !city || !zipcode) {
+    // Validate input parameters - at minimum country is required
+    if (!country) {
       return {
         isValid: false,
-        error: 'Please provide country, city, and zipcode for validation.'
+        error: 'Please provide at least a country for validation.'
       };
     }
 
-    // For now, just validate that there are users in the city/country
-    // Skip zipcode-level user validation to avoid database field issues
-    const hasUsers = await validateLocationHasUsers(country, city);
-    if (!hasUsers) {
-      return {
-        isValid: false,
-        error: 'No users found in the selected city. Please choose a different location.'
-      };
-    }
+    // Validate based on assignment level
+    if (zipcode) {
+      // Zipcode-level assignment requires country, state, city, and zipcode
+      if (!state || !city) {
+        return {
+          isValid: false,
+          error: 'Zipcode-level assignment requires country, state, city, and zipcode.'
+        };
+      }
 
-    // Check if zipcode is available (applies to both real and generated zipcodes)
-    const isAvailable = await isZipcodeAvailable(zipcode, excludeAdminId);
-    if (!isAvailable) {
-      const assignedAdmin = await getZipcodeAssignedAdmin(zipcode);
-      return {
-        isValid: false,
-        error: `Zipcode ${zipcode} is already assigned to another admin.`,
-        assignedTo: assignedAdmin || undefined
-      };
+      // Validate that there are users in the location
+      const hasUsers = await validateLocationHasUsers(country, city, state);
+      if (!hasUsers) {
+        return {
+          isValid: false,
+          error: 'No users found in the selected location. Please choose a different location.'
+        };
+      }
+
+      // Check if zipcode is available (applies to both real and generated zipcodes)
+      const isAvailable = await isZipcodeAvailable(zipcode, excludeAdminId);
+      if (!isAvailable) {
+        const assignedAdmin = await getZipcodeAssignedAdmin(zipcode);
+        return {
+          isValid: false,
+          error: `Zipcode ${zipcode} is already assigned to another admin.`,
+          assignedTo: assignedAdmin || undefined
+        };
+      }
+    } else if (city) {
+      // City-level assignment requires country, state, and city
+      if (!state) {
+        return {
+          isValid: false,
+          error: 'City-level assignment requires country, state, and city.'
+        };
+      }
+
+      const hasUsers = await validateLocationHasUsers(country, city, state);
+      if (!hasUsers) {
+        return {
+          isValid: false,
+          error: 'No users found in the selected city. Please choose a different location.'
+        };
+      }
+    } else if (state) {
+      // State-level assignment requires country and state
+      const hasUsers = await validateLocationHasUsers(country, undefined, state);
+      if (!hasUsers) {
+        return {
+          isValid: false,
+          error: 'No users found in the selected state. Please choose a different location.'
+        };
+      }
+    } else {
+      // Country-level assignment - just validate country has users
+      const hasUsers = await validateLocationHasUsers(country);
+      if (!hasUsers) {
+        return {
+          isValid: false,
+          error: 'No users found in the selected country. Please choose a different location.'
+        };
+      }
     }
 
     return { isValid: true };

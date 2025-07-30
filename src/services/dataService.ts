@@ -911,11 +911,9 @@ export async function fetchUsersWithAddresses(): Promise<UserAddressData[]> {
         role,
         default_mode,
         mobile_phone,
-        address,
         city,
         state,
         country,
-        zipcode,
         created_at
       `)
       .not('full_name', 'is', null)
@@ -971,7 +969,7 @@ export async function fetchUsersWithAddresses(): Promise<UserAddressData[]> {
           sellerAddr.city || user.city,
           sellerAddr.state || user.state,
           sellerAddr.country || user.country,
-          sellerAddr.zipcode || user.zipcode
+          sellerAddr.zipcode
         ].filter(Boolean).join(', ');
 
         if (sellerProfile.coordinates) {
@@ -980,11 +978,9 @@ export async function fetchUsersWithAddresses(): Promise<UserAddressData[]> {
       } else {
         // Use user's basic address information
         displayAddress = [
-          user.address,
           user.city,
           user.state,
-          user.country,
-          user.zipcode
+          user.country
         ].filter(Boolean).join(', ');
       }
 
@@ -1002,11 +998,11 @@ export async function fetchUsersWithAddresses(): Promise<UserAddressData[]> {
         role: user.role || 'user',
         defaultMode: user.default_mode || 'buyer',
         mobile_phone: user.mobile_phone,
-        address: user.address,
+        address: undefined, // No address field in database
         city: user.city,
         state: user.state,
         country: user.country,
-        zipcode: user.zipcode,
+        zipcode: undefined, // No zipcode field in database
         coordinates,
         seller_profile: sellerProfile ? {
           store_name: sellerProfile.store_name,

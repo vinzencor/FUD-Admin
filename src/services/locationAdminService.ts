@@ -3,10 +3,13 @@ import { invalidateZipcodesCache } from './hierarchicalLocationService';
 
 export interface AdminLocation {
   country?: string;
+  state?: string;
   city?: string;
   district?: string;
   zipcode?: string;
   streets?: string[];
+  // Assignment level indicates the granularity of admin access
+  assignmentLevel?: 'country' | 'state' | 'city' | 'zipcode';
 }
 
 export interface LocationFilterOptions {
@@ -473,14 +476,23 @@ export function applyLocationFilter(
 
   const prefix = tableAlias ? `${tableAlias}.` : '';
 
+  // Apply filters based on assignment level and available location data
   if (location.country) {
     query = query.ilike(`${prefix}country`, `%${location.country}%`);
   }
+
+  // State-level filtering (new hierarchy level)
+  if (location.state) {
+    query = query.ilike(`${prefix}state`, `%${location.state}%`);
+  }
+
   if (location.city) {
     query = query.ilike(`${prefix}city`, `%${location.city}%`);
   }
+
+  // District filtering (for backward compatibility)
   if (location.district) {
-    query = query.ilike(`${prefix}state`, `%${location.district}%`);
+    query = query.ilike(`${prefix}district`, `%${location.district}%`);
   }
 
   // Add zipcode filtering (most specific level)
@@ -506,30 +518,45 @@ export function applyLocationFilter(
 
 /**
  * Check if a user's location matches the admin's assigned location
+ * Supports hierarchical matching: Country → State → City → Zipcode
  */
 export function doesUserMatchLocation(
-  userLocation: { country?: string; city?: string; state?: string },
+  userLocation: { country?: string; city?: string; state?: string; zipcode?: string },
   adminLocation: AdminLocation
 ): boolean {
   if (!adminLocation) return true; // Super admin has no restrictions
 
-  // Check country match
+  // Check country match (required if admin has country assignment)
   if (adminLocation.country && userLocation.country) {
     if (!userLocation.country.toLowerCase().includes(adminLocation.country.toLowerCase())) {
       return false;
     }
   }
 
-  // Check city match
+  // Check state match (required if admin has state assignment)
+  if (adminLocation.state && userLocation.state) {
+    if (!userLocation.state.toLowerCase().includes(adminLocation.state.toLowerCase())) {
+      return false;
+    }
+  }
+
+  // Check city match (required if admin has city assignment)
   if (adminLocation.city && userLocation.city) {
     if (!userLocation.city.toLowerCase().includes(adminLocation.city.toLowerCase())) {
       return false;
     }
   }
 
-  // Check district/state match
+  // Check district match (for backward compatibility)
   if (adminLocation.district && userLocation.state) {
     if (!userLocation.state.toLowerCase().includes(adminLocation.district.toLowerCase())) {
+      return false;
+    }
+  }
+
+  // Check zipcode match (most specific level)
+  if (adminLocation.zipcode && userLocation.zipcode) {
+    if (userLocation.zipcode !== adminLocation.zipcode) {
       return false;
     }
   }
@@ -593,13 +620,28 @@ export async function canAccessLocation(
 }
 
 /**
- * Format location for display with street-level hierarchy
+ * Format location for display with hierarchical structure: Country → State → City → District → Zipcode
  */
 export function formatLocationDisplay(location: AdminLocation | null): string {
   if (!location) return 'Global Access';
 
   const parts: string[] = [];
 
+  // Determine assignment level and format accordingly
+  if (location.assignmentLevel) {
+    switch (location.assignmentLevel) {
+      case 'country':
+        return `Country: ${location.country || 'Unknown'}`;
+      case 'state':
+        return `State: ${location.state || 'Unknown'}, ${location.country || 'Unknown'}`;
+      case 'city':
+        return `City: ${location.city || 'Unknown'}, ${location.state || 'Unknown'}, ${location.country || 'Unknown'}`;
+      case 'zipcode':
+        return `Zipcode: ${location.zipcode || 'Unknown'}, ${location.city || 'Unknown'}, ${location.state || 'Unknown'}, ${location.country || 'Unknown'}`;
+    }
+  }
+
+  // Fallback to hierarchical display for backward compatibility
   // Add streets if available
   if (location.streets && location.streets.length > 0) {
     if (location.streets.length === 1) {
@@ -609,7 +651,7 @@ export function formatLocationDisplay(location: AdminLocation | null): string {
     }
   }
 
-  // Add zipcode, district, city, country in hierarchy order
+  // Add location components in hierarchy order: Zipcode → District → City → State → Country
   if (location.zipcode) parts.push(`Zipcode: ${location.zipcode}`);
   if (location.district) {
     const districtName = location.district.includes('District')
@@ -618,6 +660,7 @@ export function formatLocationDisplay(location: AdminLocation | null): string {
     parts.push(districtName);
   }
   if (location.city) parts.push(location.city);
+  if (location.state) parts.push(location.state);
   if (location.country) parts.push(location.country);
 
   return parts.length > 0 ? parts.join(', ') : 'Global Access';
@@ -625,45 +668,70 @@ export function formatLocationDisplay(location: AdminLocation | null): string {
 
 /**
  * Format location for compact display (for tables/cards)
+ * Shows the most specific level of assignment
  */
 export function formatLocationCompact(location: AdminLocation | null): string {
   if (!location) return 'Global Access';
 
+  // Show based on assignment level for clarity
+  if (location.assignmentLevel) {
+    switch (location.assignmentLevel) {
+      case 'country':
+        return `${location.country}`;
+      case 'state':
+        return `${location.state}, ${location.country}`;
+      case 'city':
+        return `${location.city}, ${location.state}`;
+      case 'zipcode':
+        return `${location.zipcode}, ${location.city}`;
+    }
+  }
+
+  // Fallback to hierarchical display
   const parts: string[] = [];
 
-  // For compact display, show streets count and district
-  if (location.streets && location.streets.length > 0) {
-    parts.push(`${location.streets.length} street${location.streets.length > 1 ? 's' : ''}`);
-  }
-
-  if (location.district) {
-    parts.push(`in ${location.district}`);
-  }
-
-  if (location.city) {
+  // For compact display, show most specific location first
+  if (location.zipcode) {
+    parts.push(`Zipcode: ${location.zipcode}`);
+  } else if (location.city) {
     parts.push(location.city);
+  } else if (location.state) {
+    parts.push(location.state);
+  } else if (location.country) {
+    parts.push(location.country);
+  }
+
+  // Add streets count if available
+  if (location.streets && location.streets.length > 0) {
+    parts.push(`(${location.streets.length} street${location.streets.length > 1 ? 's' : ''})`);
   }
 
   return parts.length > 0 ? parts.join(' ') : 'Global Access';
 }
 
 /**
- * Format location for detailed display showing all streets
+ * Format location for detailed display showing all location components
  */
 export function formatLocationDisplayDetailed(location: AdminLocation | null): string {
   if (!location) return 'Global Access';
 
   const parts: string[] = [];
 
+  // Add assignment level information
+  if (location.assignmentLevel) {
+    parts.push(`Level: ${location.assignmentLevel.charAt(0).toUpperCase() + location.assignmentLevel.slice(1)}`);
+  }
+
   // Add all streets
   if (location.streets && location.streets.length > 0) {
     parts.push(`Streets: ${location.streets.join(', ')}`);
   }
 
-  // Add zipcode, district, city, country
+  // Add location components in hierarchy order
   if (location.zipcode) parts.push(`Zipcode: ${location.zipcode}`);
   if (location.district) parts.push(`District: ${location.district}`);
   if (location.city) parts.push(`City: ${location.city}`);
+  if (location.state) parts.push(`State: ${location.state}`);
   if (location.country) parts.push(`Country: ${location.country}`);
 
   return parts.length > 0 ? parts.join(' | ') : 'Global Access';

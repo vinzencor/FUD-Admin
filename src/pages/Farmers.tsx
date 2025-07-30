@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Search, Filter, CheckCircle, XCircle, AlertCircle, Download, RefreshCw } from 'lucide-react';
+import { Search, Filter, CheckCircle, XCircle, AlertCircle, Download, RefreshCw, Eye, X, MapPin, Clock, Globe, Star, Calendar, Phone, Mail, Building } from 'lucide-react';
 import { fetchAllSellers, SellerData } from '../services/dataService';
 import { exportWithLoading, generateFilename, formatDateForExport, formatArrayForExport, EXPORT_COLUMNS } from '../utils/exportUtils';
 import { useAuthStore } from '../store/authStore';
@@ -10,6 +10,7 @@ import {
   LocationFilterOptions
 } from '../services/locationAdminService';
 import { supabase } from '../supabaseClient';
+import { UserProfileModal } from '../components/shared/UserProfileModal';
 
 interface Farmer {
   id: string;
@@ -29,8 +30,11 @@ interface Farmer {
 export function Farmers() {
   const user = useAuthStore((state) => state.user);
   const [showEditModal, setShowEditModal] = useState(false);
+  const [showProfileModal, setShowProfileModal] = useState(false);
   const [selectedFarmer, setSelectedFarmer] = useState<Farmer | null>(null);
+  const [selectedSellerData, setSelectedSellerData] = useState<SellerData | null>(null);
   const [farmers, setFarmers] = useState<Farmer[]>([]);
+  const [sellersData, setSellersData] = useState<SellerData[]>([]);
   const [loading, setLoading] = useState(true);
   const [exporting, setExporting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -38,6 +42,8 @@ export function Farmers() {
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [saving, setSaving] = useState(false);
   const [adminLocation, setAdminLocation] = useState<AdminLocation | null>(null);
+  const [featuredSellers, setFeaturedSellers] = useState<Set<string>>(new Set());
+  const [processingFeatured, setProcessingFeatured] = useState<string | null>(null);
 
   // Form state for editing
   const [editForm, setEditForm] = useState({
@@ -47,8 +53,63 @@ export function Farmers() {
     location: ''
   });
 
+  // Load featured sellers
+  const loadFeaturedSellers = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('featured_sellers')
+        .select('user_id')
+        .eq('is_active', true);
+
+      if (error) throw error;
+
+      const featuredUserIds = new Set(data?.map(fs => fs.user_id) || []);
+      setFeaturedSellers(featuredUserIds);
+    } catch (error) {
+      console.error('Error loading featured sellers:', error);
+    }
+  };
+
+  // Toggle featured seller status
+  const toggleFeaturedStatus = async (userId: string, userName: string) => {
+    if (!user?.id) return;
+
+    try {
+      setProcessingFeatured(userId);
+
+      const { data, error } = await supabase.rpc('toggle_featured_seller', {
+        p_user_id: userId,
+        p_admin_id: user.id,
+        p_notes: `Featured/unfeatured by ${user.email} from Farmers section`
+      });
+
+      if (error) throw error;
+
+      if (data?.success) {
+        // Update local state
+        const newFeaturedSellers = new Set(featuredSellers);
+        if (data.action === 'featured') {
+          newFeaturedSellers.add(userId);
+          alert(`${userName} has been added to featured sellers!`);
+        } else {
+          newFeaturedSellers.delete(userId);
+          alert(`${userName} has been removed from featured sellers.`);
+        }
+        setFeaturedSellers(newFeaturedSellers);
+      } else {
+        alert(data?.message || 'Failed to update featured status');
+      }
+    } catch (error) {
+      console.error('Error toggling featured status:', error);
+      alert('Failed to update featured status');
+    } finally {
+      setProcessingFeatured(null);
+    }
+  };
+
   useEffect(() => {
     loadFarmers();
+    loadFeaturedSellers();
   }, []);
 
   const loadFarmers = async () => {
@@ -65,10 +126,13 @@ export function Farmers() {
       // Set the admin location state for display
       setAdminLocation(adminLocationFilter);
 
-      const sellersData = await fetchAllSellers(adminLocationFilter);
+      const fetchedSellersData = await fetchAllSellers(adminLocationFilter);
+
+      // Store the raw sellers data for profile viewing
+      setSellersData(fetchedSellersData);
 
       // Transform seller data to farmer format
-      const farmersData: Farmer[] = sellersData.map(seller => ({
+      const farmersData: Farmer[] = fetchedSellersData.map(seller => ({
         id: seller.user_id,
         name: seller.store_name || 'Unknown Store',
         email: seller.user_email || '',
@@ -138,6 +202,31 @@ export function Farmers() {
       location: farmer.location
     });
     setShowEditModal(true);
+  };
+
+  const handleViewProfile = async (farmer: Farmer) => {
+    try {
+      // Find the corresponding seller data
+      const sellerData = sellersData.find(seller =>
+        seller.user_name === farmer.name ||
+        seller.user_email === farmer.email ||
+        seller.user_id === farmer.id
+      );
+
+      if (sellerData) {
+        setSelectedSellerData(sellerData);
+        setSelectedFarmer(farmer);
+        setShowProfileModal(true);
+      } else {
+        console.warn('Seller data not found for farmer:', farmer);
+        // Still show the modal with available farmer data
+        setSelectedFarmer(farmer);
+        setSelectedSellerData(null);
+        setShowProfileModal(true);
+      }
+    } catch (error) {
+      console.error('Error loading seller profile:', error);
+    }
   };
 
   const handleStatusChange = (farmerId: string, newStatus: Farmer['status']) => {
@@ -375,7 +464,7 @@ export function Farmers() {
         </div>
       )}
 
-      <div className="flex flex-col sm:flex-row justify-between items-center gap-4">
+      {/* <div className="flex flex-col sm:flex-row justify-between items-center gap-4">
         <div className="relative flex-1">
           <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-5 w-5" />
           <input
@@ -394,7 +483,7 @@ export function Farmers() {
           <option value="approved">Approved</option>
           <option value="suspended">Suspended</option>
         </select>
-      </div>
+      </div> */}
 
       <div className="bg-white shadow-md rounded-lg overflow-hidden">
         <table className="min-w-full divide-y divide-gray-200">
@@ -404,7 +493,6 @@ export function Farmers() {
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Contact</th>
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Location</th>
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Products</th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Actions</th>
             </tr>
           </thead>
@@ -433,23 +521,48 @@ export function Farmers() {
                     ))}
                   </div>
                 </td>
-                <td className="px-6 py-4 whitespace-nowrap">
+                {/* <td className="px-6 py-4 whitespace-nowrap">
                   <div className="flex items-center">
                     {getStatusIcon(farmer.status)}
                     <span className={`ml-2 px-2 py-1 text-xs rounded-full ${getStatusBadgeColor(farmer.status)}`}>
                       {farmer.status.charAt(0).toUpperCase() + farmer.status.slice(1)}
                     </span>
                   </div>
-                </td>
+                </td> */}
                 <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                   <div className="flex space-x-2">
                     <button
+                      onClick={() => handleViewProfile(farmer)}
+                      className="text-green-600 hover:text-green-800 px-2 py-1 rounded flex items-center gap-1"
+                      title="View Full Profile"
+                    >
+                      <Eye className="h-4 w-4" />
+                      View
+                    </button>
+                    {/* <button
                       onClick={() => handleEditFarmer(farmer)}
                       className="text-blue-600 hover:text-blue-800 px-2 py-1 rounded"
                     >
                       Edit
+                    </button> */}
+                    <button
+                      onClick={() => toggleFeaturedStatus(farmer.id, farmer.name)}
+                      disabled={processingFeatured === farmer.id}
+                      className={`px-2 py-1 rounded text-sm flex items-center gap-1 ${
+                        featuredSellers.has(farmer.id)
+                          ? 'text-yellow-600 hover:text-yellow-700'
+                          : 'text-blue-600 hover:text-blue-700'
+                      }`}
+                    >
+                      <Star className={`h-3 w-3 ${featuredSellers.has(farmer.id) ? 'fill-current' : ''}`} />
+                      {processingFeatured === farmer.id
+                        ? 'Processing...'
+                        : featuredSellers.has(farmer.id)
+                          ? 'Remove Featured'
+                          : 'Add Featured'
+                      }
                     </button>
-                    <select
+                    {/* <select
                       value={farmer.status}
                       onChange={(e) => handleStatusChange(farmer.id, e.target.value as Farmer['status'])}
                       className="text-sm border border-gray-300 rounded px-2"
@@ -457,7 +570,7 @@ export function Farmers() {
                       <option value="pending">Pending</option>
                       <option value="approved">Approve</option>
                       <option value="suspended">Suspend</option>
-                    </select>
+                    </select> */}
                   </div>
                 </td>
               </tr>
@@ -540,6 +653,399 @@ export function Farmers() {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Profile View Modal */}
+      <UserProfileModal
+        isOpen={showProfileModal}
+        onClose={() => setShowProfileModal(false)}
+        user={selectedFarmer ? {
+          id: selectedFarmer.id,
+          name: selectedFarmer.name,
+          email: selectedFarmer.email,
+          phone: selectedFarmer.phone,
+          defaultMode: 'seller',
+          location: selectedFarmer.location,
+          registrationDate: selectedFarmer.registrationDate,
+          store_name: selectedFarmer.name,
+          store_description: selectedFarmer.description,
+          is_approved: selectedFarmer.status === 'approved',
+          features: selectedFarmer.products,
+          business_type: selectedFarmer.business_type,
+          website: selectedFarmer.website,
+          certifications: selectedFarmer.certifications
+        } : null}
+        title="Farmer/Seller Profile"
+      />
+
+      {/* Keep the old modal structure for reference but make it conditional on a different state */}
+      {false && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-lg shadow-xl max-w-4xl w-full max-h-[90vh] overflow-y-auto">
+            {/* Modal Header */}
+            <div className="flex justify-between items-center p-6 border-b border-gray-200">
+              <div className="flex items-center gap-4">
+                <div className="h-12 w-12 bg-green-100 rounded-full flex items-center justify-center">
+                  <Building className="h-6 w-6 text-green-600" />
+                </div>
+                <div>
+                  <h2 className="text-2xl font-bold text-gray-900">
+                    {selectedSellerData?.store_name || selectedFarmer?.name || ''}
+                  </h2>
+                  <p className="text-sm text-gray-500">Seller Profile Details</p>
+                </div>
+              </div>
+              <button
+                onClick={() => setShowProfileModal(false)}
+                className="text-gray-400 hover:text-gray-600 transition-colors"
+              >
+                <X className="h-6 w-6" />
+              </button>
+            </div>
+
+            {/* Modal Content */}
+            <div className="p-6 space-y-6">
+              {/* Basic Information */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div className="space-y-4">
+                  <h3 className="text-lg font-semibold text-gray-900 flex items-center gap-2">
+                    <Building className="h-5 w-5 text-blue-600" />
+                    Business Information
+                  </h3>
+
+                  <div className="space-y-3">
+                    <div className="flex items-start gap-3">
+                      <Building className="h-4 w-4 text-gray-400 mt-1" />
+                      <div>
+                        <p className="text-sm font-medium text-gray-700">Store Name</p>
+                        <p className="text-sm text-gray-900">{selectedSellerData?.store_name || selectedFarmer?.name}</p>
+                      </div>
+                    </div>
+
+                    <div className="flex items-start gap-3">
+                      <Mail className="h-4 w-4 text-gray-400 mt-1" />
+                      <div>
+                        <p className="text-sm font-medium text-gray-700">Email</p>
+                        <p className="text-sm text-gray-900">{selectedSellerData?.user_email || selectedFarmer?.email}</p>
+                      </div>
+                    </div>
+
+                    <div className="flex items-start gap-3">
+                      <Phone className="h-4 w-4 text-gray-400 mt-1" />
+                      <div>
+                        <p className="text-sm font-medium text-gray-700">Phone</p>
+                        <p className="text-sm text-gray-900">{selectedSellerData?.user_phone || selectedFarmer?.phone || 'Not provided'}</p>
+                      </div>
+                    </div>
+
+                    <div className="flex items-start gap-3">
+                      <MapPin className="h-4 w-4 text-gray-400 mt-1" />
+                      <div>
+                        <p className="text-sm font-medium text-gray-700">Location</p>
+                        <p className="text-sm text-gray-900">
+                          {selectedSellerData ?
+                            `${selectedSellerData?.user_city || ''}, ${selectedSellerData?.user_state || ''}, ${selectedSellerData?.user_country || ''}`.replace(/^,\s*|,\s*$/g, '').replace(/,\s*,/g, ',') :
+                            selectedFarmer?.location
+                          }
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="flex items-start gap-3">
+                      <Calendar className="h-4 w-4 text-gray-400 mt-1" />
+                      <div>
+                        <p className="text-sm font-medium text-gray-700">Registration Date</p>
+                        <p className="text-sm text-gray-900">
+                          {selectedSellerData?.user_created_at ?
+                            new Date(selectedSellerData?.user_created_at ?? '').toLocaleDateString() :
+                            selectedFarmer?.registrationDate ?
+                            new Date(selectedFarmer?.registrationDate || '').toLocaleDateString() :
+                            'Not available'
+                          }
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="space-y-4">
+                  <h3 className="text-lg font-semibold text-gray-900 flex items-center gap-2">
+                    <Star className="h-5 w-5 text-yellow-600" />
+                    Status & Details
+                  </h3>
+
+                  <div className="space-y-3">
+                    <div className="flex items-start gap-3">
+                      <div className="h-4 w-4 mt-1">
+                        {selectedFarmer?.status === 'approved' ? (
+                          <CheckCircle className="h-4 w-4 text-green-500" />
+                        ) : selectedFarmer?.status === 'suspended' ? (
+                          <XCircle className="h-4 w-4 text-red-500" />
+                        ) : (
+                          <AlertCircle className="h-4 w-4 text-yellow-500" />
+                        )}
+                      </div>
+                      <div>
+                        <p className="text-sm font-medium text-gray-700">Account Status</p>
+                        <span className={`inline-flex px-2 py-1 text-xs font-medium rounded-full ${
+                          selectedFarmer?.status === 'approved' ? 'bg-green-100 text-green-800' :
+                          selectedFarmer?.status === 'suspended' ? 'bg-red-100 text-red-800' :
+                          'bg-yellow-100 text-yellow-800'
+                        }`}>
+                          {selectedFarmer
+                            ? selectedFarmer.status.charAt(0).toUpperCase() + selectedFarmer.status.slice(1)
+                            : ''}
+                        </span>
+                      </div>
+                    </div>
+
+                    {selectedSellerData?.is_approved !== undefined && (
+                      <div className="flex items-start gap-3">
+                        <div className="h-4 w-4 mt-1">
+                          {selectedSellerData?.is_approved ? (
+                            <CheckCircle className="h-4 w-4 text-green-500" />
+                          ) : (
+                            <AlertCircle className="h-4 w-4 text-yellow-500" />
+                          )}
+                        </div>
+                        <div>
+                          <p className="text-sm font-medium text-gray-700">Seller Approval</p>
+                          <span className={`inline-flex px-2 py-1 text-xs font-medium rounded-full ${
+                            selectedSellerData?.is_approved ? 'bg-green-100 text-green-800' : 'bg-yellow-100 text-yellow-800'
+                          }`}>
+                            {selectedSellerData?.is_approved ? 'Approved' : 'Pending Approval'}
+                          </span>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              {/* Description */}
+              {(selectedSellerData?.description || selectedFarmer?.description) && (
+                <div className="space-y-3">
+                  <h3 className="text-lg font-semibold text-gray-900">Description</h3>
+                  <div className="bg-gray-50 rounded-lg p-4">
+                    <p className="text-sm text-gray-700 leading-relaxed">
+                      {selectedSellerData?.description || selectedFarmer?.description}
+                    </p>
+                  </div>
+                </div>
+              )}
+
+              {/* Features/Products */}
+              {(selectedSellerData?.features && selectedSellerData.features.length > 0) && (
+                <div className="space-y-3">
+                  <h3 className="text-lg font-semibold text-gray-900">Features & Services</h3>
+                  <div className="flex flex-wrap gap-2">
+                    {selectedSellerData.features.map((feature, index) => (
+                      <span
+                        key={index}
+                        className="inline-flex px-3 py-1 text-xs font-medium bg-blue-100 text-blue-800 rounded-full"
+                      >
+                        {feature}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Working Hours */}
+              {selectedSellerData?.working_hours && (
+                <div className="space-y-3">
+                  <h3 className="text-lg font-semibold text-gray-900 flex items-center gap-2">
+                    <Clock className="h-5 w-5 text-blue-600" />
+                    Working Hours
+                  </h3>
+                  <div className="bg-gray-50 rounded-lg p-4">
+                    {(() => {
+                      try {
+                        const workingHours = typeof selectedSellerData.working_hours === 'string'
+                          ? JSON.parse(selectedSellerData.working_hours)
+                          : selectedSellerData.working_hours;
+
+                        if (typeof workingHours === 'object' && workingHours !== null) {
+                          return (
+                            <div className="space-y-2">
+                              {Object.entries(workingHours).map(([day, hours]) => (
+                                <div key={day} className="flex justify-between items-center">
+                                  <span className="text-sm font-medium text-gray-700 capitalize">
+                                    {day}:
+                                  </span>
+                                  <span className="text-sm text-gray-900">
+                                    {typeof hours === 'object' && hours !== null
+                                      ? `${(hours as any).open || 'Closed'} - ${(hours as any).close || 'Closed'}`
+                                      : String(hours) || 'Closed'
+                                    }
+                                  </span>
+                                </div>
+                              ))}
+                            </div>
+                          );
+                        } else {
+                          return (
+                            <p className="text-sm text-gray-700">
+                              {workingHours || 'Working hours not specified'}
+                            </p>
+                          );
+                        }
+                      } catch (error) {
+                        return (
+                          <p className="text-sm text-gray-700">
+                            {selectedSellerData.working_hours || 'Working hours not specified'}
+                          </p>
+                        );
+                      }
+                    })()}
+                  </div>
+                </div>
+              )}
+
+              {/* Address Details */}
+              {selectedSellerData?.address && (
+                <div className="space-y-3">
+                  <h3 className="text-lg font-semibold text-gray-900 flex items-center gap-2">
+                    <MapPin className="h-5 w-5 text-red-600" />
+                    Address Details
+                  </h3>
+                  <div className="bg-gray-50 rounded-lg p-4">
+                    {(() => {
+                      try {
+                        const address = typeof selectedSellerData.address === 'string'
+                          ? JSON.parse(selectedSellerData.address)
+                          : selectedSellerData.address;
+
+                        if (typeof address === 'object' && address !== null) {
+                          return (
+                            <div className="space-y-3">
+                              {address.street && (
+                                <div className="flex items-start gap-3">
+                                  <span className="text-sm font-medium text-gray-700 min-w-[80px]">Street:</span>
+                                  <span className="text-sm text-gray-900">{address.street}</span>
+                                </div>
+                              )}
+                              {address.city && (
+                                <div className="flex items-start gap-3">
+                                  <span className="text-sm font-medium text-gray-700 min-w-[80px]">City:</span>
+                                  <span className="text-sm text-gray-900">{address.city}</span>
+                                </div>
+                              )}
+                              {address.state && (
+                                <div className="flex items-start gap-3">
+                                  <span className="text-sm font-medium text-gray-700 min-w-[80px]">State:</span>
+                                  <span className="text-sm text-gray-900">{address.state}</span>
+                                </div>
+                              )}
+                              {address.country && (
+                                <div className="flex items-start gap-3">
+                                  <span className="text-sm font-medium text-gray-700 min-w-[80px]">Country:</span>
+                                  <span className="text-sm text-gray-900">{address.country}</span>
+                                </div>
+                              )}
+                              {address.zipcode && (
+                                <div className="flex items-start gap-3">
+                                  <span className="text-sm font-medium text-gray-700 min-w-[80px]">Zipcode:</span>
+                                  <span className="text-sm text-gray-900">{address.zipcode}</span>
+                                </div>
+                              )}
+                              {address.postal_code && (
+                                <div className="flex items-start gap-3">
+                                  <span className="text-sm font-medium text-gray-700 min-w-[80px]">Postal Code:</span>
+                                  <span className="text-sm text-gray-900">{address.postal_code}</span>
+                                </div>
+                              )}
+                              {/* Show any other address fields */}
+                              {Object.entries(address).map(([key, value]) => {
+                                if (!['street', 'city', 'state', 'country', 'zipcode', 'postal_code'].includes(key) && value) {
+                                  return (
+                                    <div key={key} className="flex items-start gap-3">
+                                      <span className="text-sm font-medium text-gray-700 min-w-[80px] capitalize">
+                                        {key.replace(/_/g, ' ')}:
+                                      </span>
+                                      <span className="text-sm text-gray-900">{String(value)}</span>
+                                    </div>
+                                  );
+                                }
+                                return null;
+                              })}
+                            </div>
+                          );
+                        } else {
+                          return (
+                            <p className="text-sm text-gray-700">
+                              {address || 'Address not specified'}
+                            </p>
+                          );
+                        }
+                      } catch (error) {
+                        return (
+                          <p className="text-sm text-gray-700">
+                            {selectedSellerData.address || 'Address not specified'}
+                          </p>
+                        );
+                      }
+                    })()}
+                  </div>
+                </div>
+              )}
+
+              {/* Images */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                {selectedSellerData?.profile_image && (
+                  <div className="space-y-3">
+                    <h3 className="text-lg font-semibold text-gray-900">Profile Image</h3>
+                    <div className="bg-gray-50 rounded-lg p-4">
+                      <img
+                        src={selectedSellerData.profile_image}
+                        alt="Profile"
+                        className="w-full h-48 object-cover rounded-lg"
+                        onError={(e) => {
+                          e.currentTarget.style.display = 'none';
+                        }}
+                      />
+                    </div>
+                  </div>
+                )}
+
+                {selectedSellerData?.cover_image && (
+                  <div className="space-y-3">
+                    <h3 className="text-lg font-semibold text-gray-900">Cover Image</h3>
+                    <div className="bg-gray-50 rounded-lg p-4">
+                      <img
+                        src={selectedSellerData.cover_image}
+                        alt="Cover"
+                        className="w-full h-48 object-cover rounded-lg"
+                        onError={(e) => {
+                          e.currentTarget.style.display = 'none';
+                        }}
+                      />
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Modal Footer */}
+            <div className="flex justify-end gap-3 p-6 border-t border-gray-200 bg-gray-50">
+              <button
+                onClick={() => setShowProfileModal(false)}
+                className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+              >
+                Close
+              </button>
+              <button
+                onClick={() => {
+                  setShowProfileModal(false);
+                  handleEditFarmer(selectedFarmer);
+                }}
+                className="px-4 py-2 text-sm font-medium text-white bg-blue-600 border border-transparent rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+              >
+                Edit Profile
+              </button>
+            </div>
           </div>
         </div>
       )}
