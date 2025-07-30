@@ -2,7 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { ChevronDown, MapPin, Globe, Building, Hash, Loader2, AlertCircle } from 'lucide-react';
 import {
   fetchCountriesFromUsers,
-  fetchCitiesForCountry,
+  fetchStatesForCountry,
+  fetchCitiesForCountryAndState,
   fetchZipcodesForLocation,
   LocationOption,
   getUserCountForLocation,
@@ -18,6 +19,7 @@ interface HierarchicalLocationSelectorProps {
   excludeCurrentAdmin?: string;
   placeholder?: {
     country?: string;
+    state?: string;
     city?: string;
     zipcode?: string;
   };
@@ -32,15 +34,18 @@ export function HierarchicalLocationSelector({
   placeholder = {}
 }: HierarchicalLocationSelectorProps) {
   const [countries, setCountries] = useState<LocationOption[]>([]);
+  const [states, setStates] = useState<LocationOption[]>([]);
   const [cities, setCities] = useState<LocationOption[]>([]);
   const [zipcodes, setZipcodes] = useState<LocationOption[]>([]);
-  
+
   const [selectedCountry, setSelectedCountry] = useState<string>(value?.country || '');
+  const [selectedState, setSelectedState] = useState<string>(value?.state || '');
   const [selectedCity, setSelectedCity] = useState<string>(value?.city || '');
   const [selectedZipcode, setSelectedZipcode] = useState<string>(value?.zipcode || '');
-  
+
   const [loading, setLoading] = useState({
     countries: false,
+    states: false,
     cities: false,
     zipcodes: false
   });
@@ -54,43 +59,67 @@ export function HierarchicalLocationSelector({
     loadCountries();
   }, []);
 
-  // Load cities when country changes
+  // Load states when country changes
   useEffect(() => {
     if (selectedCountry) {
-      loadCities(selectedCountry);
+      loadStates(selectedCountry);
     } else {
-      setCities([]);
+      setStates([]);
+      setSelectedState('');
       setSelectedCity('');
       setSelectedZipcode('');
     }
   }, [selectedCountry]);
 
+  // Load cities when country and state change
+  useEffect(() => {
+    if (selectedCountry && selectedState) {
+      loadCities(selectedCountry, selectedState);
+    } else {
+      setCities([]);
+      setSelectedCity('');
+      setSelectedZipcode('');
+    }
+  }, [selectedCountry, selectedState]);
+
   // Load zipcodes when city changes
   useEffect(() => {
-    if (selectedCountry && selectedCity) {
+    if (selectedCountry && selectedState && selectedCity) {
       loadZipcodes(selectedCountry, selectedCity);
     } else {
       setZipcodes([]);
       setSelectedZipcode('');
     }
-  }, [selectedCountry, selectedCity]);
+  }, [selectedCountry, selectedState, selectedCity]);
 
   // Update user count when location changes
   useEffect(() => {
     if (showUserCounts) {
       updateUserCount();
     }
-  }, [selectedCountry, selectedCity, selectedZipcode, showUserCounts]);
+  }, [selectedCountry, selectedState, selectedCity, selectedZipcode, showUserCounts]);
 
   // Emit changes to parent
   useEffect(() => {
     const location: AdminLocation = {};
     if (selectedCountry) location.country = selectedCountry;
+    if (selectedState) location.state = selectedState;
     if (selectedCity) location.city = selectedCity;
     if (selectedZipcode) location.zipcode = selectedZipcode;
-    
+
+    // Determine assignment level based on what's selected
+    if (selectedZipcode) {
+      location.assignmentLevel = 'zipcode';
+    } else if (selectedCity) {
+      location.assignmentLevel = 'city';
+    } else if (selectedState) {
+      location.assignmentLevel = 'state';
+    } else if (selectedCountry) {
+      location.assignmentLevel = 'country';
+    }
+
     onChange(location);
-  }, [selectedCountry, selectedCity, selectedZipcode, onChange]);
+  }, [selectedCountry, selectedState, selectedCity, selectedZipcode, onChange]);
 
   const loadCountries = async () => {
     try {
@@ -106,10 +135,23 @@ export function HierarchicalLocationSelector({
     }
   };
 
-  const loadCities = async (country: string) => {
+  const loadStates = async (country: string) => {
+    try {
+      setLoading(prev => ({ ...prev, states: true }));
+      const stateData = await fetchStatesForCountry(country);
+      setStates(stateData);
+    } catch (err) {
+      console.error('Error loading states:', err);
+      setError('Failed to load states');
+    } finally {
+      setLoading(prev => ({ ...prev, states: false }));
+    }
+  };
+
+  const loadCities = async (country: string, state: string) => {
     try {
       setLoading(prev => ({ ...prev, cities: true }));
-      const cityData = await fetchCitiesForCountry(country);
+      const cityData = await fetchCitiesForCountryAndState(country, state);
       setCities(cityData);
     } catch (err) {
       console.error('Error loading cities:', err);
@@ -144,6 +186,7 @@ export function HierarchicalLocationSelector({
       const count = await getUserCountForLocation(
         selectedCountry || undefined,
         selectedCity || undefined,
+        selectedState || undefined,
         selectedZipcode || undefined
       );
       setUserCount(count);
@@ -155,6 +198,14 @@ export function HierarchicalLocationSelector({
   const handleCountryChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
     const country = e.target.value;
     setSelectedCountry(country);
+    setSelectedState('');
+    setSelectedCity('');
+    setSelectedZipcode('');
+  };
+
+  const handleStateChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+    const state = e.target.value;
+    setSelectedState(state);
     setSelectedCity('');
     setSelectedZipcode('');
   };
@@ -169,7 +220,17 @@ export function HierarchicalLocationSelector({
     setSelectedZipcode(e.target.value);
   };
 
-  const isComplete = selectedCountry && selectedCity && selectedZipcode;
+  // Admin can be assigned at different levels: country, state, city, or zipcode
+  const isComplete = selectedCountry && (
+    // Country-level assignment
+    (!selectedState && !selectedCity && !selectedZipcode) ||
+    // State-level assignment
+    (selectedState && !selectedCity && !selectedZipcode) ||
+    // City-level assignment
+    (selectedState && selectedCity && !selectedZipcode) ||
+    // Zipcode-level assignment
+    (selectedState && selectedCity && selectedZipcode)
+  );
 
   return (
     <div className="space-y-4">
@@ -194,7 +255,7 @@ export function HierarchicalLocationSelector({
 
       {/* Country Selection */}
       <div className="space-y-2">
-        <label className="block text-sm font-medium text-gray-700 flex items-center gap-2">
+        <label className="flex text-sm font-medium text-gray-700 items-center gap-2">
           <Globe className="h-4 w-4" />
           Country
         </label>
@@ -222,9 +283,42 @@ export function HierarchicalLocationSelector({
         </div>
       </div>
 
+      {/* State Selection */}
+      <div className="space-y-2">
+        <label className="flex text-sm font-medium text-gray-700 items-center gap-2">
+          <Building className="h-4 w-4" />
+          State/Province
+        </label>
+        <div className="relative">
+          <select
+            value={selectedState}
+            onChange={handleStateChange}
+            disabled={disabled || loading.states || !selectedCountry}
+            className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-gray-100 disabled:cursor-not-allowed appearance-none pr-10"
+          >
+            <option value="">{placeholder.state || 'Select State/Province...'}</option>
+            {states.map(state => (
+              <option key={state.value} value={state.value}>
+                {state.label}
+              </option>
+            ))}
+          </select>
+          <div className="absolute inset-y-0 right-0 flex items-center pr-3 pointer-events-none">
+            {loading.states ? (
+              <Loader2 className="h-4 w-4 animate-spin text-gray-400" />
+            ) : (
+              <ChevronDown className="h-4 w-4 text-gray-400" />
+            )}
+          </div>
+        </div>
+        {selectedCountry && states.length === 0 && !loading.states && (
+          <p className="text-xs text-gray-500">No states found for selected country</p>
+        )}
+      </div>
+
       {/* City Selection */}
       <div className="space-y-2">
-        <label className="block text-sm font-medium text-gray-700 flex items-center gap-2">
+        <label className="flex text-sm font-medium text-gray-700 items-center gap-2">
           <Building className="h-4 w-4" />
           City
         </label>
@@ -232,7 +326,7 @@ export function HierarchicalLocationSelector({
           <select
             value={selectedCity}
             onChange={handleCityChange}
-            disabled={disabled || loading.cities || !selectedCountry}
+            disabled={disabled || loading.cities || !selectedState}
             className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-gray-100 disabled:cursor-not-allowed appearance-none pr-10"
           >
             <option value="">{placeholder.city || 'Select City...'}</option>
@@ -250,8 +344,8 @@ export function HierarchicalLocationSelector({
             )}
           </div>
         </div>
-        {selectedCountry && cities.length === 0 && !loading.cities && (
-          <p className="text-xs text-gray-500">No cities found for selected country</p>
+        {selectedState && cities.length === 0 && !loading.cities && (
+          <p className="text-xs text-gray-500">No cities found for selected state</p>
         )}
       </div>
 
@@ -314,7 +408,7 @@ export function HierarchicalLocationSelector({
       </div>
 
       {/* Selection Summary */}
-      {(selectedCountry || selectedCity || selectedZipcode) && (
+      {(selectedCountry || selectedState || selectedCity || selectedZipcode) && (
         <div className="bg-gray-50 border border-gray-200 rounded-lg p-4">
           <h4 className="text-sm font-medium text-gray-900 mb-2">Selected Location:</h4>
           <div className="space-y-1 text-sm text-gray-600">
@@ -322,6 +416,12 @@ export function HierarchicalLocationSelector({
               <div className="flex items-center gap-2">
                 <Globe className="h-3 w-3" />
                 <span>Country: {selectedCountry}</span>
+              </div>
+            )}
+            {selectedState && (
+              <div className="flex items-center gap-2">
+                <Building className="h-3 w-3" />
+                <span>State: {selectedState}</span>
               </div>
             )}
             {selectedCity && (
@@ -337,17 +437,25 @@ export function HierarchicalLocationSelector({
               </div>
             )}
           </div>
-          
+
+          {/* Assignment Level Display */}
+          <div className="mt-2 text-xs text-blue-600 bg-blue-50 px-2 py-1 rounded">
+            {selectedZipcode ? 'Zipcode-level assignment' :
+             selectedCity ? 'City-level assignment' :
+             selectedState ? 'State-level assignment' :
+             selectedCountry ? 'Country-level assignment' : 'No assignment'}
+          </div>
+
           {/* Completion Status */}
           <div className="mt-3 pt-3 border-t border-gray-200">
             <div className={`text-xs font-medium ${
-              isComplete 
-                ? 'text-green-600' 
+              isComplete
+                ? 'text-green-600'
                 : 'text-orange-600'
             }`}>
-              {isComplete 
-                ? '✓ Location selection complete' 
-                : '⚠ Please select all three levels for complete location assignment'
+              {isComplete
+                ? '✓ Location selection complete'
+                : '⚠ Please select at least a country for admin assignment'
               }
             </div>
           </div>

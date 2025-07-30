@@ -8,6 +8,8 @@ import { Orders } from './pages/Orders';
 import { Interests } from './pages/Interests';
 import { Feedback } from './pages/Feedback';
 import { Farmers } from './pages/Farmers';
+import { Buyers } from './pages/Buyers';
+import { FeaturedSellers } from './pages/FeaturedSellers';
 import { Reports } from './pages/super-admin/Reports';
 
 import { SuperAdminSetup } from './pages/SuperAdminSetup';
@@ -79,7 +81,9 @@ function App() {
           <Route path="home" element={<HomePage />} />
           <Route path="dashboard" element={<Dashboard />} />
           <Route path="members" element={<Members />} />
+          <Route path="buyers" element={<Buyers />} />
           <Route path="farmers" element={<Farmers />} />
+          <Route path="featured-sellers" element={<FeaturedSellers />} />
           {/* <Route path="pma-members" element={<PMAMembers />} /> */}
           <Route path="orders" element={<Orders />} />
           <Route path="interests" element={<Interests />} />
@@ -102,7 +106,9 @@ function App() {
           <Route path="home" element={<HomePage />} />
           <Route path="dashboard" element={<Dashboard />} />
           <Route path="members" element={<Members />} />
+          <Route path="buyers" element={<Buyers />} />
           <Route path="farmers" element={<Farmers />} />
+          <Route path="featured-sellers" element={<FeaturedSellers />} />
           {/* <Route path="pma-members" element={<PMAMembers />} /> */}
           <Route path="orders" element={<Orders />} />
           <Route path="interests" element={<Interests />} />

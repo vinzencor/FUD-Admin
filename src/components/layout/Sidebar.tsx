@@ -3,6 +3,7 @@ import { NavLink, useNavigate } from 'react-router-dom';
 import {
   LayoutDashboard,
   Users,
+  User,
   ShoppingBasket,
   MessageSquare,
   LogOut,
@@ -26,10 +27,12 @@ export function Sidebar() {
   const basePath = isSuperAdmin ? '/super-admin' : '/admin';
 
   const navigation = [
-    { name: 'Home', to: `${basePath}/home`, icon: Home },
     { name: 'Dashboard', to: `${basePath}/dashboard`, icon: LayoutDashboard },
-    { name: 'Members', to: `${basePath}/members`, icon: Users },
+    { name: 'Cover page', to: `${basePath}/home`, icon: Home },
+    { name: 'Database', to: `${basePath}/members`, icon: Users },
+    { name: 'Buyers', to: `${basePath}/buyers`, icon: User },
     { name: 'Farmers', to: `${basePath}/farmers`, icon: Store },
+    { name: 'Featured Sellers', to: `${basePath}/featured-sellers`, icon: Crown },
     // { name: 'PMA Members', to: `${basePath}/pma-members`, icon: Crown },
     { name: 'Orders', to: `${basePath}/orders`, icon: ShoppingBasket },
     { name: 'Interests', to: `${basePath}/interests`, icon: Heart },

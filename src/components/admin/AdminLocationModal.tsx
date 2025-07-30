@@ -58,8 +58,25 @@ export function AdminLocationModal({
   };
 
   const validateLocation = async (location: AdminLocation): Promise<boolean> => {
-    if (!location.country || !location.city || !location.zipcode) {
-      setValidationError('Please select country, city, and zipcode for complete location assignment');
+    // At minimum, country is required
+    if (!location.country) {
+      setValidationError('Please select at least a country for admin assignment');
+      return false;
+    }
+
+    // Validate based on assignment level
+    if (location.assignmentLevel === 'zipcode' && (!location.state || !location.city || !location.zipcode)) {
+      setValidationError('Zipcode-level assignment requires country, state, city, and zipcode');
+      return false;
+    }
+
+    if (location.assignmentLevel === 'city' && (!location.state || !location.city)) {
+      setValidationError('City-level assignment requires country, state, and city');
+      return false;
+    }
+
+    if (location.assignmentLevel === 'state' && !location.state) {
+      setValidationError('State-level assignment requires country and state');
       return false;
     }
 
@@ -68,6 +85,7 @@ export function AdminLocationModal({
         location.country,
         location.city,
         location.zipcode,
+        location.state,
         mode === 'edit' ? user.id : undefined // Exclude current admin when editing
       );
 
@@ -158,7 +176,7 @@ export function AdminLocationModal({
               <MapPin className="h-5 w-5 text-blue-600" />
             )}
             <h2 className="text-lg font-semibold">
-              {mode === 'promote' ? 'Promote to Admin' : 'Edit Admin Location'}
+              {mode === 'promote' ? 'Promote to Regional Admin' : 'Edit Regional Admin Location'}
             </h2>
           </div>
         </DialogHeader>
@@ -184,21 +202,28 @@ export function AdminLocationModal({
             excludeCurrentAdmin={mode === 'edit' ? user.id : undefined}
             placeholder={{
               country: 'Select Country...',
+              state: 'Select State/Province...',
               city: 'Select City...',
               zipcode: 'Select Zipcode/Pincode...'
             }}
           />
 
           {/* Preview */}
-          {location.country && location.city && location.zipcode && (
+          {location.country && (
             <div className="bg-blue-50 p-3 rounded-lg">
               <p className="text-sm text-blue-800">
                 <strong>Admin will manage users in:</strong>
               </p>
               <div className="mt-2 text-xs text-blue-700">
-                <div><strong>Zipcode:</strong> {location.zipcode}</div>
-                <div><strong>City:</strong> {location.city}</div>
+                {location.assignmentLevel && (
+                  <div className="mb-2 font-medium text-blue-800">
+                    Assignment Level: {location.assignmentLevel.charAt(0).toUpperCase() + location.assignmentLevel.slice(1)}
+                  </div>
+                )}
                 <div><strong>Country:</strong> {location.country}</div>
+                {location.state && <div><strong>State:</strong> {location.state}</div>}
+                {location.city && <div><strong>City:</strong> {location.city}</div>}
+                {location.zipcode && <div><strong>Zipcode:</strong> {location.zipcode}</div>}
               </div>
             </div>
           )}
@@ -229,7 +254,7 @@ export function AdminLocationModal({
             </Button>
             <Button
               onClick={handleSubmit}
-              disabled={!location.country || !location.city || !location.zipcode || loading}
+              disabled={!location.country || loading}
               className="flex items-center"
             >
               {loading ? (
@@ -240,7 +265,7 @@ export function AdminLocationModal({
               ) : (
                 <>
                   <Check className="h-4 w-4 mr-2" />
-                  {mode === 'promote' ? 'Promote to Admin' : 'Update Location'}
+                  {mode === 'promote' ? 'Promote to Regional Admin' : 'Update Location'}
                 </>
               )}
             </Button>

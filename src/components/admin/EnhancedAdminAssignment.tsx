@@ -307,7 +307,7 @@ export function EnhancedAdminAssignment({
         onClose={() => setShowUserSelection(false)}
         onUserSelect={handleUserSelect}
         title="Select User for Admin Assignment"
-        description="Choose a user to promote to admin role with location-based access control"
+        description="Choose a user to promote to regional admin role with location-based access control"
         userTypeFilter="all"
       />
 
