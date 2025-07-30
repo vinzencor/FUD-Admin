@@ -167,8 +167,8 @@ export function AdminLocationModal({
 
   return (
     <Dialog open={isOpen} onOpenChange={handleClose}>
-      <DialogContent className="max-w-md">
-        <DialogHeader>
+      <DialogContent className="max-w-md max-h-[90vh] overflow-hidden flex flex-col">
+        <DialogHeader className="flex-shrink-0">
           <div className="flex items-center space-x-2">
             {mode === 'promote' ? (
               <Crown className="h-5 w-5 text-purple-600" />
@@ -181,7 +181,7 @@ export function AdminLocationModal({
           </div>
         </DialogHeader>
 
-        <div className="space-y-4">
+        <div className="space-y-4 overflow-y-auto flex-1 pr-2 -mr-2">
           {/* User Info */}
           <div className="bg-gray-50 p-3 rounded-lg">
             <h3 className="font-medium text-gray-900">{user.name}</h3>
@@ -243,33 +243,34 @@ export function AdminLocationModal({
             </div>
           )}
 
-          {/* Action Buttons */}
-          <div className="flex justify-end space-x-3 pt-4 border-t">
-            <Button
-              variant="outline"
-              onClick={handleClose}
-              disabled={loading}
-            >
-              Cancel
-            </Button>
-            <Button
-              onClick={handleSubmit}
-              disabled={!location.country || loading}
-              className="flex items-center"
-            >
-              {loading ? (
-                <>
-                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                  {mode === 'promote' ? 'Promoting...' : 'Updating...'}
-                </>
-              ) : (
-                <>
-                  <Check className="h-4 w-4 mr-2" />
-                  {mode === 'promote' ? 'Promote to Regional Admin' : 'Update Location'}
-                </>
-              )}
-            </Button>
-          </div>
+        </div>
+
+        {/* Action Buttons - Fixed at bottom */}
+        <div className="flex justify-end space-x-3 pt-4 border-t flex-shrink-0 bg-white">
+          <Button
+            variant="outline"
+            onClick={handleClose}
+            disabled={loading}
+          >
+            Cancel
+          </Button>
+          <Button
+            onClick={handleSubmit}
+            disabled={!location.country || loading}
+            className="flex items-center"
+          >
+            {loading ? (
+              <>
+                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                {mode === 'promote' ? 'Promoting...' : 'Updating...'}
+              </>
+            ) : (
+              <>
+                <Check className="h-4 w-4 mr-2" />
+                {mode === 'promote' ? 'Promote to Regional Admin' : 'Update Location'}
+              </>
+            )}
+          </Button>
         </div>
       </DialogContent>
     </Dialog>
