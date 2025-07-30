@@ -634,87 +634,89 @@ export function Members() {
                     </span>
                   </div>
                 ) : user?.role === 'super_admin' ? (
-                  <div className="mt-3 flex flex-wrap gap-2 justify-center">
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => {
-                        setSelectedMember(member);
-                        setShowProfileModal(true);
-                      }}
-                      className="flex items-center gap-1 text-xs"
-                    >
-                      <Edit className="h-3 w-3" />
-                      View Profile
-                    </Button>
-
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => toggleFeaturedStatus(member.id, member.name)}
-                      disabled={processingFeatured === member.id}
-                      className={`flex items-center gap-1 text-xs ${
-                        featuredSellers.has(member.id)
-                          ? 'text-yellow-600 hover:text-yellow-700 border-yellow-300'
-                          : 'text-blue-600 hover:text-blue-700'
-                      }`}
-                    >
-                      <Star className={`h-3 w-3 ${featuredSellers.has(member.id) ? 'fill-current' : ''}`} />
-                      {processingFeatured === member.id
-                        ? 'Processing...'
-                        : featuredSellers.has(member.id)
-                          ? 'Remove Featured'
-                          : 'Add Featured'
-                      }
-                    </Button>
-
-                    {member.role === 'user' && (
+                  <div className="mt-3 space-y-2">
+                    {/* View Profile Button - Always available */}
+                    <div className="flex justify-center">
                       <Button
                         variant="outline"
                         size="sm"
-                        onClick={() => handlePromoteToAdmin(member)}
-                        className="flex items-center gap-1 text-purple-600 hover:text-purple-700 text-xs"
+                        onClick={() => {
+                          setSelectedMember(member);
+                          setShowProfileModal(true);
+                        }}
+                        className="flex items-center gap-1 text-xs min-w-[100px]"
                       >
-                        <Crown className="h-3 w-3" />
-                        Promote to Regional Admin
+                        <Edit className="h-3 w-3" />
+                        View Profile
                       </Button>
+                    </div>
+
+                    {/* Featured Seller Button - Only for sellers */}
+                    {member.isSeller && (
+                      <div className="flex justify-center">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => toggleFeaturedStatus(member.id, member.name)}
+                          disabled={processingFeatured === member.id}
+                          className={`flex items-center gap-1 text-xs min-w-[120px] ${
+                            featuredSellers.has(member.id)
+                              ? 'text-yellow-600 hover:text-yellow-700 border-yellow-300'
+                              : 'text-blue-600 hover:text-blue-700'
+                          }`}
+                        >
+                          <Star className={`h-3 w-3 ${featuredSellers.has(member.id) ? 'fill-current' : ''}`} />
+                          {processingFeatured === member.id
+                            ? 'Processing...'
+                            : featuredSellers.has(member.id)
+                              ? 'Remove Featured'
+                              : 'Add Featured'
+                          }
+                        </Button>
+                      </div>
+                    )}
+
+                    {/* Role Management Buttons */}
+                    {member.role === 'user' && (
+                      <div className="flex justify-center">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => handlePromoteToAdmin(member)}
+                          className="flex items-center gap-1 text-purple-600 hover:text-purple-700 text-xs min-w-[160px]"
+                        >
+                          <Crown className="h-3 w-3" />
+                          Promote to Regional Admin
+                        </Button>
+                      </div>
                     )}
 
                     {member.role === 'admin' && (
+                      <div className="flex justify-center">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => handleEditAdminLocation(member)}
+                          className="flex items-center gap-1 text-blue-600 hover:text-blue-700 text-xs min-w-[120px]"
+                        >
+                          <Crown className="h-3 w-3" />
+                          Edit Location
+                        </Button>
+                      </div>
+                    )}
+
+                    {/* Delete Button */}
+                    <div className="flex justify-center">
                       <Button
                         variant="outline"
                         size="sm"
-                        onClick={() => handleEditAdminLocation(member)}
-                        className="flex items-center gap-1 text-blue-600 hover:text-blue-700 text-xs"
+                        onClick={() => handleDeleteMember(member.id)}
+                        className="flex items-center gap-1 text-red-600 hover:text-red-700 text-xs min-w-[80px]"
                       >
-                        <Crown className="h-3 w-3" />
-                        Edit Location
+                        <Trash2 className="h-3 w-3" />
+                        Delete
                       </Button>
-                    )}
-
-                    {/* <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => {
-                        setSelectedMember(member);
-                        setSelectedRole(member.role ?? 'user');
-                        setShowRoleModal(true);
-                      }}
-                      className="flex items-center gap-1 text-xs"
-                    >
-                      <Crown className="h-3 w-3" />
-                      Role
-                    </Button> */}
-
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => handleDeleteMember(member.id)}
-                      className="flex items-center gap-1 text-red-600 hover:text-red-700 text-xs"
-                    >
-                      <Trash2 className="h-3 w-3" />
-                      Delete
-                    </Button>
+                    </div>
                   </div>
                 ) : null}
               </div>
@@ -830,7 +832,8 @@ export function Members() {
                     ) : user?.role === 'super_admin' ? (
                       // Super admin has full access
                       expandedRowId === member.id ? (
-                        <div className="flex justify-center gap-2 flex-wrap">
+                        <div className="flex flex-col items-center gap-2 py-2">
+                          {/* View Profile Button - Always available */}
                           <Button
                             variant="outline"
                             size="sm"
@@ -838,38 +841,42 @@ export function Members() {
                               setSelectedMember(member);
                               setShowProfileModal(true);
                             }}
-                            className="flex items-center gap-1"
+                            className="flex items-center gap-1 min-w-[110px]"
                           >
                             <Edit className="h-3 w-3" />
                             View Profile
                           </Button>
 
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => toggleFeaturedStatus(member.id, member.name)}
-                            disabled={processingFeatured === member.id}
-                            className={`flex items-center gap-1 ${
-                              featuredSellers.has(member.id)
-                                ? 'text-yellow-600 hover:text-yellow-700 border-yellow-300'
-                                : 'text-blue-600 hover:text-blue-700'
-                            }`}
-                          >
-                            <Star className={`h-3 w-3 ${featuredSellers.has(member.id) ? 'fill-current' : ''}`} />
-                            {processingFeatured === member.id
-                              ? 'Processing...'
-                              : featuredSellers.has(member.id)
-                                ? 'Remove Featured'
-                                : 'Add Featured'
-                            }
-                          </Button>
+                          {/* Featured Seller Button - Only for sellers */}
+                          {member.isSeller && (
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => toggleFeaturedStatus(member.id, member.name)}
+                              disabled={processingFeatured === member.id}
+                              className={`flex items-center gap-1 min-w-[130px] ${
+                                featuredSellers.has(member.id)
+                                  ? 'text-yellow-600 hover:text-yellow-700 border-yellow-300'
+                                  : 'text-blue-600 hover:text-blue-700'
+                              }`}
+                            >
+                              <Star className={`h-3 w-3 ${featuredSellers.has(member.id) ? 'fill-current' : ''}`} />
+                              {processingFeatured === member.id
+                                ? 'Processing...'
+                                : featuredSellers.has(member.id)
+                                  ? 'Remove Featured'
+                                  : 'Add Featured'
+                              }
+                            </Button>
+                          )}
 
+                          {/* Role Management Buttons */}
                           {member.role === 'user' && (
                             <Button
                               variant="outline"
                               size="sm"
                               onClick={() => handlePromoteToAdmin(member)}
-                              className="flex items-center gap-1 text-purple-600 hover:text-purple-700"
+                              className="flex items-center gap-1 text-purple-600 hover:text-purple-700 min-w-[160px]"
                             >
                               <Crown className="h-3 w-3" />
                               Promote to Regional Admin
@@ -881,32 +888,19 @@ export function Members() {
                               variant="outline"
                               size="sm"
                               onClick={() => handleEditAdminLocation(member)}
-                              className="flex items-center gap-1 text-blue-600 hover:text-blue-700"
+                              className="flex items-center gap-1 text-blue-600 hover:text-blue-700 min-w-[120px]"
                             >
                               <Crown className="h-3 w-3" />
                               Edit Location
                             </Button>
                           )}
 
-                          {/* <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => {
-                              setSelectedMember(member);
-                              setSelectedRole(member.role ?? 'user');
-                              setShowRoleModal(true);
-                            }}
-                            className="flex items-center gap-1"
-                          >
-                            <Crown className="h-3 w-3" />
-                            Role
-                          </Button> */}
-
+                          {/* Delete Button */}
                           <Button
                             variant="outline"
                             size="sm"
                             onClick={() => handleDeleteMember(member.id)}
-                            className="flex items-center gap-1 text-red-600 hover:text-red-700"
+                            className="flex items-center gap-1 text-red-600 hover:text-red-700 min-w-[80px]"
                           >
                             <Trash2 className="h-3 w-3" />
                             Delete

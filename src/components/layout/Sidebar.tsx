@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { NavLink, useNavigate } from 'react-router-dom';
 import {
   LayoutDashboard,
@@ -15,6 +15,8 @@ import {
   Activity,
   Home,
   UserCog,
+  Menu,
+  X,
 } from 'lucide-react';
 import { cn } from '../../lib/utils';
 import { useAuthStore } from '../../store/authStore';
@@ -22,9 +24,14 @@ import { useAuthStore } from '../../store/authStore';
 export function Sidebar() {
   const navigate = useNavigate();
   const { user, logout } = useAuthStore();
-  
+  const [isCollapsed, setIsCollapsed] = useState(true);
+  const [isHovered, setIsHovered] = useState(false);
+
   const isSuperAdmin = user?.role === 'super_admin';
   const basePath = isSuperAdmin ? '/super-admin' : '/admin';
+
+  // Determine if sidebar should show full content
+  const showFullContent = !isCollapsed || isHovered;
 
   const navigation = [
     { name: 'Dashboard', to: `${basePath}/dashboard`, icon: LayoutDashboard },
@@ -51,41 +58,97 @@ export function Sidebar() {
   };
 
   return (
-    <div className="flex h-full w-64 flex-col bg-gray-900">
-      <div className="flex h-16 items-center justify-center border-b border-gray-700">
-        <h1 className="text-xl font-bold text-white">
-          {isSuperAdmin ? 'Super Admin Panel' : 'Regional Admin Panel'}
-        </h1>
+    <div
+      className={cn(
+        "flex h-full flex-col bg-gray-900 transition-all duration-300 ease-in-out relative z-50",
+        showFullContent ? "w-64" : "w-16"
+      )}
+      onMouseEnter={() => setIsHovered(true)}
+      onMouseLeave={() => setIsHovered(false)}
+    >
+      {/* Header with Menu Toggle */}
+      <div className="flex h-16 items-center border-b border-gray-700 px-4">
+        <button
+          onClick={() => setIsCollapsed(!isCollapsed)}
+          className="flex items-center justify-center w-8 h-8 text-gray-300 hover:text-white hover:bg-gray-700 rounded-md transition-colors"
+        >
+          {isCollapsed ? <Menu className="h-5 w-5" /> : <X className="h-5 w-5" />}
+        </button>
+
+        {showFullContent && (
+          <h1 className="ml-3 text-lg font-bold text-white truncate">
+            {isSuperAdmin ? 'Super Admin Panel' : 'Regional Admin Panel'}
+          </h1>
+        )}
       </div>
-      <nav className="flex-1 space-y-1 px-2 py-4">
+      {/* Navigation */}
+      <nav className="flex-1 space-y-1 px-2 py-4 overflow-hidden">
         {navigation.map((item) => (
           <NavLink
             key={item.name}
             to={item.to}
             className={({ isActive }) =>
               cn(
-                'group flex items-center px-2 py-2 text-sm font-medium rounded-md',
+                'group flex items-center px-2 py-2 text-sm font-medium rounded-md transition-all duration-200 relative',
                 isActive
                   ? 'bg-gray-800 text-white'
-                  : 'text-gray-300 hover:bg-gray-700 hover:text-white'
+                  : 'text-gray-300 hover:bg-gray-700 hover:text-white',
+                !showFullContent && 'justify-center'
               )
             }
+            title={!showFullContent ? item.name : undefined}
           >
             <item.icon
-              className="mr-3 h-5 w-5 flex-shrink-0"
+              className={cn(
+                "h-5 w-5 flex-shrink-0 transition-all duration-200",
+                showFullContent ? "mr-3" : "mr-0"
+              )}
               aria-hidden="true"
             />
-            {item.name}
+            {showFullContent && (
+              <span className="truncate transition-opacity duration-200">
+                {item.name}
+              </span>
+            )}
+
+            {/* Tooltip for collapsed state */}
+            {!showFullContent && (
+              <div className="absolute left-full ml-2 px-2 py-1 bg-gray-800 text-white text-xs rounded opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none whitespace-nowrap z-50">
+                {item.name}
+              </div>
+            )}
           </NavLink>
         ))}
       </nav>
+      {/* Logout Section */}
       <div className="border-t border-gray-700 p-4">
         <button
           onClick={handleLogout}
-          className="group flex w-full items-center px-2 py-2 text-sm font-medium text-gray-300 hover:bg-gray-700 hover:text-white rounded-md"
+          className={cn(
+            "group flex w-full items-center px-2 py-2 text-sm font-medium text-gray-300 hover:bg-gray-700 hover:text-white rounded-md transition-all duration-200 relative",
+            !showFullContent && 'justify-center'
+          )}
+          title={!showFullContent ? 'Logout' : undefined}
         >
-          <LogOut className="mr-3 h-5 w-5" aria-hidden="true" />
-          Logout
+          <LogOut
+            className={cn(
+              "h-5 w-5 transition-all duration-200",
+              showFullContent ? "mr-3" : "mr-0"
+            )}
+            aria-hidden="true"
+          />
+          {showFullContent && (
+            <span className="transition-opacity duration-200">
+              Logout
+            </span>
+          )}
+
+          {/* Tooltip for collapsed state */}
+          {!showFullContent && (
+            <div className="absolute left-full ml-2 px-2 py-1 bg-gray-800 text-white text-xs rounded opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none whitespace-nowrap z-50">
+              Logout
+            </div>
+          )}
         </button>
       </div>
     </div>
