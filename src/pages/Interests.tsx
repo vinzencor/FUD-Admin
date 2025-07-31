@@ -101,7 +101,7 @@ export function Interests() {
         if (locationFilteredUserIds.length === 0) {
           // No users in admin's location, return empty results
           setInterests([]);
-          setTotalCount(0);
+          setTotalInterests(0);
           setLoading(false);
           return;
         }
@@ -405,142 +405,152 @@ export function Interests() {
         <>
           {/* Interests Table */}
           <div className="bg-white shadow-sm border border-gray-100 rounded-lg overflow-hidden">
-            <table className="min-w-full divide-y divide-gray-200">
-              <thead className="bg-gray-50">
-                <tr>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Interest ID
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Buyer
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Seller
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Product
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Quantity
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Total Value
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Status
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Date
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Actions
-                  </th>
-                </tr>
-              </thead>
-              <tbody className="bg-white divide-y divide-gray-200">
-                {interests.map((interest) => {
-                  const totalValue = parseFloat(interest.listing?.price || '0') * interest.quantity;
+            <div className="overflow-x-auto">
+              <table className="w-full divide-y divide-gray-200 table-fixed" style={{ minWidth: '1100px' }}>
+                <thead className="bg-gray-50">
+                  <tr>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-28">
+                      Interest ID
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-48">
+                      Buyer
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-32">
+                      Seller
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-48">
+                      Product
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-24">
+                      Quantity
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-28">
+                      Total Value
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-32">
+                      Status
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-40">
+                      Date
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-20">
+                      Actions
+                    </th>
+                  </tr>
+                </thead>
+                <tbody className="bg-white divide-y divide-gray-200">
+                  {interests.map((interest) => {
+                    const totalValue = parseFloat(interest.listing?.price || '0') * interest.quantity;
 
-                  return (
-                    <tr key={interest.id} className="hover:bg-gray-50">
-                      <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
-                        <span className="font-mono text-xs">{interest.id.slice(0, 8)}...</span>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="flex items-center">
-                          <User className="h-4 w-4 text-gray-400 mr-2" />
-                          <div>
-                            <div className="text-sm font-medium text-gray-900">
-                              {interest.buyer?.full_name || 'Unknown'}
-                            </div>
-                            <div className="text-sm text-gray-500">
-                              {interest.buyer?.email}
-                            </div>
-                          </div>
-                        </div>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                        {interest.listing?.seller_name || 'Unknown'}
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="flex items-center">
-                          <Package className="h-4 w-4 text-gray-400 mr-2" />
-                          <div>
-                            <div className="text-sm font-medium text-gray-900">
-                              {interest.listing?.name || 'Unknown Product'}
-                            </div>
-                            <div className="text-sm text-gray-500">
-                              ${interest.listing?.price || '0'} per {interest.listing?.unit || 'unit'}
+                    return (
+                      <tr key={interest.id} className="hover:bg-gray-50">
+                        <td className="px-6 py-4 text-sm font-medium text-gray-900 w-28">
+                          <span className="font-mono text-xs">{interest.id.slice(0, 8)}...</span>
+                        </td>
+                        <td className="px-6 py-4 w-48">
+                          <div className="flex items-center">
+                            <User className="h-4 w-4 text-gray-400 mr-2 flex-shrink-0" />
+                            <div className="min-w-0 flex-1">
+                              <div className="text-sm font-medium text-gray-900 truncate" title={interest.buyer?.full_name || 'Unknown'}>
+                                {interest.buyer?.full_name || 'Unknown'}
+                              </div>
+                              <div className="text-sm text-gray-500 truncate" title={interest.buyer?.email}>
+                                {interest.buyer?.email}
+                              </div>
                             </div>
                           </div>
-                        </div>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                        {interest.quantity} {interest.listing?.unit || 'units'}
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
-                        ${totalValue.toFixed(2)}
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="flex items-center space-x-2">
-                          {getStatusIcon(interest.status)}
-                          {user?.role === 'super_admin' ? (
-                            <select
-                              value={interest.status}
-                              onChange={(e) => handleStatusChange(interest.id, e.target.value as Interest['status'])}
-                              className={`text-sm rounded-full px-2 py-1 ${getStatusColor(interest.status)}`}
-                            >
-                              <option value="pending">Pending</option>
-                              <option value="in_discussion">In Discussion</option>
-                              <option value="accepted">Accepted</option>
-                              <option value="completed">Completed</option>
-                              <option value="rejected">Rejected</option>
-                            </select>
-                          ) : (
-                            <span className={`px-2 py-1 text-xs rounded-full ${getStatusColor(interest.status)}`}>
-                              {interest.status.split('_').map(word =>
-                                word.charAt(0).toUpperCase() + word.slice(1)
-                              ).join(' ')}
-                            </span>
-                          )}
-                        </div>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                        {new Date(interest.created_at).toLocaleDateString('en-US', {
-                          year: 'numeric',
-                          month: 'short',
-                          day: 'numeric',
-                          hour: '2-digit',
-                          minute: '2-digit'
-                        })}
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                        <button
-                          onClick={() => {
-                            setSelectedInterest(interest);
-                            setShowDetailModal(true);
-                          }}
-                          className="text-indigo-600 hover:text-indigo-900 flex items-center"
-                          title="View Details"
-                        >
-                          <Eye className="h-4 w-4 mr-1" />
-                          View
-                        </button>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
+                        </td>
+                        <td className="px-6 py-4 text-sm text-gray-500 w-32">
+                          <div className="truncate" title={interest.listing?.seller_name || 'Unknown'}>
+                            {interest.listing?.seller_name || 'Unknown'}
+                          </div>
+                        </td>
+                        <td className="px-6 py-4 w-48">
+                          <div className="flex items-center">
+                            <Package className="h-4 w-4 text-gray-400 mr-2 flex-shrink-0" />
+                            <div className="min-w-0 flex-1">
+                              <div className="text-sm font-medium text-gray-900 truncate" title={interest.listing?.name || 'Unknown Product'}>
+                                {interest.listing?.name || 'Unknown Product'}
+                              </div>
+                              <div className="text-sm text-gray-500 truncate">
+                                ${interest.listing?.price || '0'} per {interest.listing?.unit || 'unit'}
+                              </div>
+                            </div>
+                          </div>
+                        </td>
+                        <td className="px-6 py-4 text-sm text-gray-500 w-24">
+                          {interest.quantity} {interest.listing?.unit || 'units'}
+                        </td>
+                        <td className="px-6 py-4 text-sm font-medium text-gray-900 w-28">
+                          ${totalValue.toFixed(2)}
+                        </td>
+                        <td className="px-6 py-4 w-32">
+                          <div className="flex items-center space-x-2">
+                            {getStatusIcon(interest.status)}
+                            {user?.role === 'super_admin' ? (
+                              <select
+                                value={interest.status}
+                                onChange={(e) => handleStatusChange(interest.id, e.target.value as Interest['status'])}
+                                className={`text-xs rounded-full px-2 py-1 ${getStatusColor(interest.status)}`}
+                              >
+                                <option value="pending">Pending</option>
+                                <option value="in_discussion">In Discussion</option>
+                                <option value="accepted">Accepted</option>
+                                <option value="completed">Completed</option>
+                                <option value="rejected">Rejected</option>
+                              </select>
+                            ) : (
+                              <span className={`px-2 py-1 text-xs rounded-full ${getStatusColor(interest.status)}`}>
+                                {interest.status.split('_').map(word =>
+                                  word.charAt(0).toUpperCase() + word.slice(1)
+                                ).join(' ')}
+                              </span>
+                            )}
+                          </div>
+                        </td>
+                        <td className="px-6 py-4 text-sm text-gray-500 w-40">
+                          {new Date(interest.created_at).toLocaleDateString('en-US', {
+                            year: 'numeric',
+                            month: 'short',
+                            day: 'numeric',
+                            hour: '2-digit',
+                            minute: '2-digit'
+                          })}
+                        </td>
+                        <td className="px-6 py-4 text-sm text-gray-500 w-20">
+                          <button
+                            onClick={() => {
+                              setSelectedInterest(interest);
+                              setShowDetailModal(true);
+                            }}
+                            className="text-indigo-600 hover:text-indigo-900 p-1"
+                            title="View Details"
+                          >
+                            <Eye className="h-4 w-4" />
+                          </button>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
           </div>
 
           {/* Pagination */}
           {totalPages > 1 && (
-            <div className="flex justify-between items-center mt-4">
+            <div className="flex flex-col sm:flex-row justify-between items-center mt-4 gap-4">
               <div className="text-sm text-gray-500">
                 Showing {Math.min((page - 1) * pageSize + 1, totalInterests)} to {Math.min(page * pageSize, totalInterests)} of {totalInterests} interests
               </div>
-              <div className="flex gap-2">
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => setPage(1)}
+                  disabled={page === 1}
+                  className={`px-3 py-1 rounded border ${page === 1 ? 'bg-gray-100 text-gray-400 cursor-not-allowed' : 'bg-white text-gray-700 hover:bg-gray-50'}`}
+                >
+                  First
+                </button>
                 <button
                   onClick={() => setPage(p => Math.max(1, p - 1))}
                   disabled={page === 1}
@@ -548,12 +558,88 @@ export function Interests() {
                 >
                   Previous
                 </button>
+
+                {/* Page numbers */}
+                <div className="flex items-center gap-1">
+                  {(() => {
+                    const maxVisiblePages = 5;
+                    const halfVisible = Math.floor(maxVisiblePages / 2);
+                    let startPage = Math.max(1, page - halfVisible);
+                    let endPage = Math.min(totalPages, startPage + maxVisiblePages - 1);
+
+                    // Adjust start if we're near the end
+                    if (endPage - startPage < maxVisiblePages - 1) {
+                      startPage = Math.max(1, endPage - maxVisiblePages + 1);
+                    }
+
+                    const pages = [];
+
+                    // Add ellipsis at start if needed
+                    if (startPage > 1) {
+                      pages.push(
+                        <button
+                          key={1}
+                          onClick={() => setPage(1)}
+                          className="px-3 py-1 rounded border bg-white text-gray-700 hover:bg-gray-50"
+                        >
+                          1
+                        </button>
+                      );
+                      if (startPage > 2) {
+                        pages.push(<span key="start-ellipsis" className="px-2 text-gray-500">...</span>);
+                      }
+                    }
+
+                    // Add visible page numbers
+                    for (let i = startPage; i <= endPage; i++) {
+                      pages.push(
+                        <button
+                          key={i}
+                          onClick={() => setPage(i)}
+                          className={`px-3 py-1 rounded border ${
+                            i === page
+                              ? 'bg-primary-600 text-white border-primary-600'
+                              : 'bg-white text-gray-700 hover:bg-gray-50'
+                          }`}
+                        >
+                          {i}
+                        </button>
+                      );
+                    }
+
+                    // Add ellipsis at end if needed
+                    if (endPage < totalPages) {
+                      if (endPage < totalPages - 1) {
+                        pages.push(<span key="end-ellipsis" className="px-2 text-gray-500">...</span>);
+                      }
+                      pages.push(
+                        <button
+                          key={totalPages}
+                          onClick={() => setPage(totalPages)}
+                          className="px-3 py-1 rounded border bg-white text-gray-700 hover:bg-gray-50"
+                        >
+                          {totalPages}
+                        </button>
+                      );
+                    }
+
+                    return pages;
+                  })()}
+                </div>
+
                 <button
                   onClick={() => setPage(p => Math.min(totalPages, p + 1))}
                   disabled={page === totalPages}
                   className={`px-3 py-1 rounded border ${page === totalPages ? 'bg-gray-100 text-gray-400 cursor-not-allowed' : 'bg-white text-gray-700 hover:bg-gray-50'}`}
                 >
                   Next
+                </button>
+                <button
+                  onClick={() => setPage(totalPages)}
+                  disabled={page === totalPages}
+                  className={`px-3 py-1 rounded border ${page === totalPages ? 'bg-gray-100 text-gray-400 cursor-not-allowed' : 'bg-white text-gray-700 hover:bg-gray-50'}`}
+                >
+                  Last
                 </button>
               </div>
             </div>

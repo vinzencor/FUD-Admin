@@ -49,109 +49,116 @@ export function OrderTable({ orders, onStatusChange }: OrderTableProps) {
 
   return (
     <div className="bg-white shadow-sm border border-gray-100 rounded-lg overflow-hidden">
-      <table className="min-w-full divide-y divide-gray-200">
-        <thead className="bg-gray-50">
-          <tr>
-            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-              Order ID
-            </th>
-            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-              Customer
-            </th>
-            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-              Seller
-            </th>
-            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-              Products
-            </th>
-            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-              Total
-            </th>
-            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-              Status
-            </th>
-            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-              Date
-            </th>
-          </tr>
-        </thead>
-        <tbody className="bg-white divide-y divide-gray-200">
-          {orders.map((order) => (
-            <tr key={order.id} className="hover:bg-gray-50">
-              <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
-                <div className="flex items-center space-x-2">
-                  <span className="font-mono text-xs">
-                    {order.id.startsWith('interest_') ? order.id.replace('interest_', '') : order.id}
-                  </span>
-                  {order.id.startsWith('interest_') ? (
-                    <span className="px-2 py-1 text-xs bg-blue-100 text-blue-800 rounded-full">
-                      Interest
-                    </span>
-                  ) : (
-                    <span className="px-2 py-1 text-xs bg-green-100 text-green-800 rounded-full">
-                      Order
-                    </span>
-                  )}
-                </div>
-              </td>
-              <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                {order.customer}
-              </td>
-              <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                {order.farmer}
-              </td>
-              <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                <div className="flex flex-wrap gap-1">
-                  {order.products.map((product) => (
-                    <span
-                      key={product}
-                      className="px-2 py-1 text-xs bg-gray-100 rounded-full"
-                    >
-                      {product}
-                    </span>
-                  ))}
-                </div>
-              </td>
-              <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                ${order.total.toFixed(2)}
-              </td>
-              <td className="px-6 py-4 whitespace-nowrap">
-                <div className="flex items-center space-x-2">
-                  {getStatusIcon(order.status)}
-                  {onStatusChange ? (
-                    <select
-                      value={order.status}
-                      onChange={(e) => onStatusChange(order.id, e.target.value as Order['status'])}
-                      className={`ml-2 text-sm rounded-full px-2 py-1 ${getStatusColor(order.status)}`}
-                    >
-                      <option value="pending">Pending</option>
-                      <option value="in_discussion">In Discussion</option>
-                      <option value="accepted">Accepted</option>
-                      <option value="completed">Completed</option>
-                      <option value="rejected">Rejected</option>
-                    </select>
-                  ) : (
-                    <span className={`px-2 py-1 text-xs rounded-full ${getStatusColor(order.status)}`}>
-                      {order.status.split('_').map(word => 
-                        word.charAt(0).toUpperCase() + word.slice(1)
-                      ).join(' ')}
-                    </span>
-                  )}
-                </div>
-              </td>
-              <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                {new Date(order.date).toLocaleDateString('en-US', {
-                  year: 'numeric',
-                  month: 'short',
-                  day: 'numeric',
-                  hour: '2-digit',
-                  minute: '2-digit'
-                })}
-              </td>
+      <div className="overflow-x-auto">
+        <table className="w-full divide-y divide-gray-200 table-fixed" style={{ minWidth: '900px' }}>
+          <thead className="bg-gray-50">
+            <tr>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-32">
+                Order ID
+              </th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-48">
+                Customer
+              </th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-40">
+                Seller
+              </th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-48">
+                Products
+              </th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-24">
+                Total
+              </th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-32">
+                Status
+              </th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-40">
+                Date
+              </th>
             </tr>
-          ))}
-        </tbody>
-      </table>
+          </thead>
+          <tbody className="bg-white divide-y divide-gray-200">
+            {orders.map((order) => (
+              <tr key={order.id} className="hover:bg-gray-50">
+                <td className="px-6 py-4 text-sm font-medium text-gray-900 w-32">
+                  <div className="flex flex-col space-y-1">
+                    <span className="font-mono text-xs truncate">
+                      {order.id.startsWith('interest_') ? order.id.replace('interest_', '') : order.id}
+                    </span>
+                    {/* {order.id.startsWith('interest_') ? (
+                      <span className="px-2 py-1 text-xs bg-blue-100 text-blue-800 rounded-full text-center">
+                        Interest
+                      </span>
+                    ) : (
+                      <span className="px-2 py-1 text-xs bg-green-100 text-green-800 rounded-full text-center">
+                        Order
+                      </span>
+                    )} */}
+                  </div>
+                </td>
+                <td className="px-6 py-4 text-sm text-gray-500 w-48">
+                  <div className="truncate" title={order.customer}>
+                    {order.customer}
+                  </div>
+                </td>
+                <td className="px-6 py-4 text-sm text-gray-500 w-40">
+                  <div className="truncate" title={order.farmer}>
+                    {order.farmer}
+                  </div>
+                </td>
+                <td className="px-6 py-4 text-sm text-gray-500 w-48">
+                  <div className="flex flex-wrap gap-1">
+                    {order.products.map((product) => (
+                      <span
+                        key={product}
+                        className="px-2 py-1 text-xs bg-gray-100 rounded-full"
+                        title={product}
+                      >
+                        {product.length > 15 ? `${product.substring(0, 15)}...` : product}
+                      </span>
+                    ))}
+                  </div>
+                </td>
+                <td className="px-6 py-4 text-sm text-gray-500 font-medium w-24">
+                  ${order.total.toFixed(2)}
+                </td>
+                <td className="px-6 py-4 w-32">
+                  <div className="flex items-center space-x-2">
+                    {getStatusIcon(order.status)}
+                    {onStatusChange ? (
+                      <select
+                        value={order.status}
+                        onChange={(e) => onStatusChange(order.id, e.target.value as Order['status'])}
+                        className={`text-xs rounded-full px-2 py-1 ${getStatusColor(order.status)}`}
+                      >
+                        <option value="pending">Pending</option>
+                        <option value="in_discussion">In Discussion</option>
+                        <option value="accepted">Accepted</option>
+                        <option value="completed">Completed</option>
+                        <option value="rejected">Rejected</option>
+                      </select>
+                    ) : (
+                      <span className={`px-2 py-1 text-xs rounded-full ${getStatusColor(order.status)}`}>
+                        {order.status.split('_').map(word =>
+                          word.charAt(0).toUpperCase() + word.slice(1)
+                        ).join(' ')}
+                      </span>
+                    )}
+                  </div>
+                </td>
+                <td className="px-6 py-4 text-sm text-gray-500 w-40">
+                  {new Date(order.date).toLocaleDateString('en-US', {
+                    year: 'numeric',
+                    month: 'short',
+                    day: 'numeric',
+                    hour: '2-digit',
+                    minute: '2-digit'
+                  })}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
     </div>
   );
 }

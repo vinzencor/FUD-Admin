@@ -33,8 +33,6 @@ export function Feedback() {
   const [feedbacks, setFeedbacks] = useState<Feedback[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [selectedStatus, setSelectedStatus] = useState<string>('all');
-  const [selectedType, setSelectedType] = useState<string>('all');
   const [selectedReviewType, setSelectedReviewType] = useState<string>('all');
   const [searchTerm, setSearchTerm] = useState('');
   const [responseModal, setResponseModal] = useState<{
@@ -443,19 +441,33 @@ export function Feedback() {
       }
     }
 
-    // Filter by status
-    if (selectedStatus !== 'all' && feedback.status !== selectedStatus) {
-      return false;
-    }
+    // Filter by review type - simplified to only show seller, product, and service feedback
+    if (selectedReviewType !== 'all') {
+      // For reviews, check the reviewType field
+      if (feedback.type === 'review' && feedback.reviewType !== selectedReviewType) {
+        return false;
+      }
+      // For regular feedback, we can categorize based on content or subject
+      if (feedback.type === 'feedback') {
+        const subjectLower = feedback.subject.toLowerCase();
+        const messageLower = feedback.message.toLowerCase();
 
-    // Filter by type
-    if (selectedType !== 'all' && feedback.type !== selectedType) {
-      return false;
-    }
-
-    // Filter by review type (only for reviews)
-    if (selectedReviewType !== 'all' && feedback.type === 'review' && feedback.reviewType !== selectedReviewType) {
-      return false;
+        if (selectedReviewType === 'seller' &&
+            !(subjectLower.includes('seller') || subjectLower.includes('farmer') ||
+              messageLower.includes('seller') || messageLower.includes('farmer'))) {
+          return false;
+        }
+        if (selectedReviewType === 'product' &&
+            !(subjectLower.includes('product') || subjectLower.includes('item') ||
+              messageLower.includes('product') || messageLower.includes('item'))) {
+          return false;
+        }
+        if (selectedReviewType === 'service' &&
+            !(subjectLower.includes('service') || subjectLower.includes('support') ||
+              messageLower.includes('service') || messageLower.includes('support'))) {
+          return false;
+        }
+      }
     }
 
     // Search term
@@ -537,27 +549,15 @@ export function Feedback() {
             {exporting ? 'Exporting...' : 'Export CSV'}
           </button>
           <select
-            value={selectedType}
-            onChange={(e) => setSelectedType(e.target.value)}
+            value={selectedReviewType}
+            onChange={(e) => setSelectedReviewType(e.target.value)}
             className="border border-gray-300 rounded-lg px-3 py-2"
           >
-            <option value="all">All Types</option>
-            <option value="customer">Customer Feedback</option>
-            <option value="farmer">Farmer Feedback</option>
-            <option value="review">Product/Service Reviews</option>
+            <option value="all">All Feedback</option>
+            <option value="seller">Seller Feedback</option>
+            <option value="product">Product Feedback</option>
+            <option value="service">Service Feedback</option>
           </select>
-          {selectedType === 'review' && (
-            <select
-              value={selectedReviewType}
-              onChange={(e) => setSelectedReviewType(e.target.value)}
-              className="border border-gray-300 rounded-lg px-3 py-2"
-            >
-              <option value="all">All Review Types</option>
-              <option value="product">Product Reviews</option>
-              <option value="seller">Seller Reviews</option>
-              <option value="service">Service Reviews</option>
-            </select>
-          )}
           {/* <select
             value={selectedStatus}
             onChange={(e) => setSelectedStatus(e.target.value)}
@@ -584,34 +584,18 @@ export function Feedback() {
 
       {/* Feedback Statistics */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-        {/* <div className="bg-blue-50 p-4 rounded-lg">
+        <div className="bg-blue-50 p-4 rounded-lg">
           <div className="flex items-center">
             <div className="flex-shrink-0">
               <div className="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center">
                 <span className="text-blue-600 font-semibold text-sm">
-                  {feedbacks.filter(f => f.status === 'new').length}
+                  {feedbacks.filter(f => f.type === 'review' && f.reviewType === 'seller').length}
                 </span>
               </div>
             </div>
             <div className="ml-3">
-              <p className="text-sm font-medium text-blue-900">New</p>
-              <p className="text-xs text-blue-600">Pending review</p>
-            </div>
-          </div>
-        </div> */}
-
-        {/* <div className="bg-yellow-50 p-4 rounded-lg">
-          <div className="flex items-center">
-            <div className="flex-shrink-0">
-              <div className="w-8 h-8 bg-yellow-100 rounded-full flex items-center justify-center">
-                <span className="text-yellow-600 font-semibold text-sm">
-                  {feedbacks.filter(f => f.status === 'in_progress').length}
-                </span>
-              </div>
-            </div>
-            <div className="ml-3">
-              <p className="text-sm font-medium text-yellow-900">In Progress</p>
-              <p className="text-xs text-yellow-600">Being handled</p>
+              <p className="text-sm font-medium text-blue-900">Seller</p>
+              <p className="text-xs text-blue-600">Seller feedback</p>
             </div>
           </div>
         </div>
@@ -621,16 +605,32 @@ export function Feedback() {
             <div className="flex-shrink-0">
               <div className="w-8 h-8 bg-green-100 rounded-full flex items-center justify-center">
                 <span className="text-green-600 font-semibold text-sm">
-                  {feedbacks.filter(f => f.status === 'resolved').length}
+                  {feedbacks.filter(f => f.type === 'review' && f.reviewType === 'product').length}
                 </span>
               </div>
             </div>
             <div className="ml-3">
-              <p className="text-sm font-medium text-green-900">Resolved</p>
-              <p className="text-xs text-green-600">Completed</p>
+              <p className="text-sm font-medium text-green-900">Product</p>
+              <p className="text-xs text-green-600">Product feedback</p>
             </div>
           </div>
-        </div> */}
+        </div>
+
+        <div className="bg-yellow-50 p-4 rounded-lg">
+          <div className="flex items-center">
+            <div className="flex-shrink-0">
+              <div className="w-8 h-8 bg-yellow-100 rounded-full flex items-center justify-center">
+                <span className="text-yellow-600 font-semibold text-sm">
+                  {feedbacks.filter(f => f.type === 'review' && f.reviewType === 'service').length}
+                </span>
+              </div>
+            </div>
+            <div className="ml-3">
+              <p className="text-sm font-medium text-yellow-900">Service</p>
+              <p className="text-xs text-yellow-600">Service feedback</p>
+            </div>
+          </div>
+        </div>
 
         <div className="bg-gray-50 p-4 rounded-lg">
           <div className="flex items-center">
@@ -673,8 +673,6 @@ export function Feedback() {
             {feedbacks.length > 0 && (
               <button
                 onClick={() => {
-                  setSelectedStatus('all');
-                  setSelectedType('all');
                   setSelectedReviewType('all');
                   setSearchTerm('');
                 }}
