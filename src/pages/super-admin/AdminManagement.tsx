@@ -336,7 +336,7 @@ export function AdminManagement() {
             
             <p className="text-xs sm:text-sm text-green-600 mt-2 flex items-start gap-1">
               <CheckCircle className="h-3 w-3 sm:h-4 sm:w-4 mt-0.5 flex-shrink-0" />
-              <span>Manage admin users, their locations, and permissions</span>
+              <span>Manage Regional admin users, their locations, and permissions</span>
             </p>
           </div>
           
@@ -407,7 +407,7 @@ export function AdminManagement() {
             >
               <div className="flex items-center gap-2">
                 <UserCog className="h-4 w-4" />
-                Manage Admins
+                Manage Regional Admins
               </div>
             </button>
             <button
@@ -420,7 +420,7 @@ export function AdminManagement() {
             >
               <div className="flex items-center gap-2">
                 <Crown className="h-4 w-4" />
-                Assign New Admin
+                Assign New Regional Admin
               </div>
             </button>
           </nav>
@@ -484,7 +484,7 @@ export function AdminManagement() {
               <div className="text-gray-400 mb-4">
                 <UserCog className="h-12 w-12" />
               </div>
-              <h3 className="text-sm font-medium text-gray-900 mb-1">No admins found</h3>
+              <h3 className="text-sm font-medium text-gray-900 mb-1">No Regional admins found</h3>
               <p className="text-xs text-gray-500 text-center mb-4">
                 {searchTerm || roleFilter !== 'all' || locationFilter
                   ? 'Try adjusting your search or filters'
@@ -622,7 +622,7 @@ export function AdminManagement() {
                           ) : (
                             <>
                               <Trash2 className="h-3 w-3" />
-                              Remove Admin
+                              Remove Regional Admin
                             </>
                           )}
                         </Button>
@@ -642,7 +642,7 @@ export function AdminManagement() {
               <div className="text-gray-400 mb-4">
                 <UserCog className="h-16 w-16" />
               </div>
-              <h3 className="text-lg font-medium text-gray-900 mb-2">No admins found</h3>
+              <h3 className="text-lg font-medium text-gray-900 mb-2">No Regional admins found</h3>
               <p className="text-sm text-gray-500 text-center max-w-sm mb-6">
                 {searchTerm || roleFilter !== 'all' || locationFilter
                   ? 'Try adjusting your search or filters to find admin users'

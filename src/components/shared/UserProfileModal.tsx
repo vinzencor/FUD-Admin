@@ -9,20 +9,22 @@ interface UserProfileData {
   phone?: string;
   defaultMode?: string;
   role?: string;
-  
+
   // Location info
   address?: string;
   city?: string;
   state?: string;
+  district?: string;
   country?: string;
   zipcode?: string;
   location?: string;
-  
+  coordinates?: any;
+
   // Dates
   registrationDate?: string;
   lastActive?: string;
   created_at?: string;
-  
+
   // Seller specific
   store_name?: string;
   store_description?: string;
@@ -32,7 +34,7 @@ interface UserProfileData {
   business_type?: string;
   website?: string;
   certifications?: string[];
-  
+
   // Additional fields
   profile_image?: string;
   average_rating?: number;
@@ -45,6 +47,8 @@ interface UserProfileModalProps {
   user: UserProfileData | null;
   title?: string;
 }
+
+
 
 export function UserProfileModal({ isOpen, onClose, user, title = "User Profile" }: UserProfileModalProps) {
   if (!isOpen || !user) return null;
@@ -167,23 +171,47 @@ export function UserProfileModal({ isOpen, onClose, user, title = "User Profile"
               </h3>
               
               <div className="space-y-3">
-                {user.address && (
+                {/* Show street address if available */}
+                {user.address && user.address !== 'Address not provided' && user.address.includes(',') && (
                   <div>
-                    <label className="block text-sm font-medium text-gray-700">Address</label>
-                    <div className="mt-1 text-sm text-gray-900">{user.address}</div>
+                    <label className="block text-sm font-medium text-gray-700">Street Address</label>
+                    <div className="mt-1 text-sm text-gray-900">
+                      {user.address.split(', ')[0] || 'Not provided'}
+                    </div>
                   </div>
                 )}
-                
+
+                {/* Show apartment/unit if available */}
+                {user.address && user.address.includes(',') && user.address.split(', ').length > 1 && user.address.split(', ')[1] && !user.address.split(', ')[1].match(/^[A-Z][a-z]/) && (
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700">Apartment/Unit</label>
+                    <div className="mt-1 text-sm text-gray-900">
+                      {user.address.split(', ')[1]}
+                    </div>
+                  </div>
+                )}
+
                 <div>
                   <label className="block text-sm font-medium text-gray-700">City</label>
-                  <div className="mt-1 text-sm text-gray-900">{user.city || 'Not provided'}</div>
+                  <div className="mt-1 text-sm text-gray-900">
+                    {user.city || 'Not provided'}
+                  </div>
                 </div>
-                
+
                 <div>
                   <label className="block text-sm font-medium text-gray-700">State/Province</label>
-                  <div className="mt-1 text-sm text-gray-900">{user.state || 'Not provided'}</div>
+                  <div className="mt-1 text-sm text-gray-900">
+                    {user.state || 'Not provided'}
+                  </div>
                 </div>
-                
+
+                {user.district && (
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700">District</label>
+                    <div className="mt-1 text-sm text-gray-900">{user.district}</div>
+                  </div>
+                )}
+
                 <div>
                   <label className="block text-sm font-medium text-gray-700">Country</label>
                   <div className="mt-1 text-sm text-gray-900 flex items-center gap-2">
@@ -194,15 +222,29 @@ export function UserProfileModal({ isOpen, onClose, user, title = "User Profile"
 
                 {user.zipcode && (
                   <div>
-                    <label className="block text-sm font-medium text-gray-700">Zipcode</label>
-                    <div className="mt-1 text-sm text-gray-900">{user.zipcode}</div>
+                    <label className="block text-sm font-medium text-gray-700">Zipcode/Postal Code</label>
+                    <div className="mt-1 text-sm text-gray-900">
+                      {user.zipcode}
+                    </div>
                   </div>
                 )}
 
-                {user.location && (
+                <div>
+                  <label className="block text-sm font-medium text-gray-700">Full Address</label>
+                  <div className="mt-1 text-sm text-gray-900">
+                    {user.address || user.location || 'Address not provided'}
+                  </div>
+                </div>
+
+                {user.coordinates && (
                   <div>
-                    <label className="block text-sm font-medium text-gray-700">Full Location</label>
-                    <div className="mt-1 text-sm text-gray-900">{user.location}</div>
+                    <label className="block text-sm font-medium text-gray-700">Coordinates</label>
+                    <div className="mt-1 text-sm text-gray-900 font-mono">
+                      {typeof user.coordinates === 'object'
+                        ? `${user.coordinates.latitude || user.coordinates.lat || 'N/A'}, ${user.coordinates.longitude || user.coordinates.lng || 'N/A'}`
+                        : user.coordinates
+                      }
+                    </div>
                   </div>
                 )}
               </div>

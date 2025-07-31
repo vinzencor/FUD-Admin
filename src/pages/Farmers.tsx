@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Search, Filter, CheckCircle, XCircle, AlertCircle, Download, RefreshCw, Eye, X, MapPin, Clock, Globe, Star, Calendar, Phone, Mail, Building } from 'lucide-react';
+import { Search, Filter, CheckCircle, XCircle, AlertCircle, Download, RefreshCw, X, MapPin, Clock, Globe, Star, Calendar, Phone, Mail, Building } from 'lucide-react';
 import { fetchAllSellers, SellerData } from '../services/dataService';
 import { exportWithLoading, generateFilename, formatDateForExport, formatArrayForExport, EXPORT_COLUMNS } from '../utils/exportUtils';
 import { useAuthStore } from '../store/authStore';
@@ -25,6 +25,14 @@ interface Farmer {
   description?: string;
   website?: string;
   certifications?: string[];
+  fullAddress?: string;
+  coordinates?: any;
+  // Individual address fields
+  city?: string;
+  state?: string;
+  district?: string;
+  country?: string;
+  zipcode?: string;
 }
 
 export function Farmers() {
@@ -44,6 +52,7 @@ export function Farmers() {
   const [adminLocation, setAdminLocation] = useState<AdminLocation | null>(null);
   const [featuredSellers, setFeaturedSellers] = useState<Set<string>>(new Set());
   const [processingFeatured, setProcessingFeatured] = useState<string | null>(null);
+  const [searchTerm, setSearchTerm] = useState('');
 
   // Form state for editing
   const [editForm, setEditForm] = useState({
@@ -141,7 +150,15 @@ export function Farmers() {
         products: seller.features || [], // Use features as products for now
         status: seller.is_approved ? 'approved' : 'pending',
         registrationDate: seller.user_created_at || '',
-        description: seller.description
+        description: seller.description,
+        fullAddress: seller.user_full_address,
+        coordinates: seller.user_coordinates,
+        // Individual address fields
+        city: seller.user_city,
+        state: seller.user_state,
+        district: seller.user_district,
+        country: seller.user_country,
+        zipcode: seller.user_zipcode
       }));
       setFarmers(farmersData);
     } catch (err) {
@@ -397,9 +414,22 @@ export function Farmers() {
     }
   };
 
-  const filteredFarmers = statusFilter === 'all'
-    ? farmers
-    : farmers.filter(farmer => farmer.status === statusFilter);
+  // Filter farmers by status and search term
+  const filteredFarmers = farmers.filter(farmer => {
+    // Status filter
+    const matchesStatus = statusFilter === 'all' || farmer.status === statusFilter;
+
+    // Search filter
+    const matchesSearch = searchTerm === '' ||
+      farmer.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      farmer.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      farmer.phone.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      farmer.location.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (farmer.fullAddress && farmer.fullAddress.toLowerCase().includes(searchTerm.toLowerCase())) ||
+      farmer.products.some(product => product.toLowerCase().includes(searchTerm.toLowerCase()));
+
+    return matchesStatus && matchesSearch;
+  });
 
   if (loading) {
     return (
@@ -415,7 +445,11 @@ export function Farmers() {
       <div className="flex justify-between items-center">
         <div>
           <h2 className="text-2xl font-semibold text-gray-900">Farmers</h2>
-          <p className="text-gray-600 mt-1">Manage seller profiles and farmer accounts ({farmers.length} total)</p>
+          <p className="text-gray-600 mt-1">
+            Manage seller profiles and farmer accounts
+            ({filteredFarmers.length} {searchTerm || statusFilter !== 'all' ? 'filtered' : 'total'}
+            {farmers.length !== filteredFarmers.length ? ` of ${farmers.length}` : ''})
+          </p>
           {adminLocation ? (
             <div className="mt-2 text-sm text-blue-600 bg-blue-50 px-3 py-1 rounded-full inline-block">
               📍 Viewing farmers from: {adminLocation.zipcode ? `Zipcode ${adminLocation.zipcode}, ` : ''}{adminLocation.city}, {adminLocation.district}, {adminLocation.country}
@@ -464,12 +498,14 @@ export function Farmers() {
         </div>
       )}
 
-      {/* <div className="flex flex-col sm:flex-row justify-between items-center gap-4">
+      <div className="flex flex-col sm:flex-row justify-between items-center gap-4">
         <div className="relative flex-1">
           <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-5 w-5" />
           <input
             type="text"
-            placeholder="Search farmers..."
+            placeholder="Search farmers by name, email, phone, location, or products..."
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
             className="pl-10 pr-4 py-2 w-full border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent"
           />
         </div>
@@ -483,7 +519,7 @@ export function Farmers() {
           <option value="approved">Approved</option>
           <option value="suspended">Suspended</option>
         </select>
-      </div> */}
+      </div>
 
       <div className="bg-white shadow-md rounded-lg overflow-hidden">
         <table className="min-w-full divide-y divide-gray-200">
@@ -491,14 +527,18 @@ export function Farmers() {
             <tr>
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Name</th>
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Contact</th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Location</th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Address</th>
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Products</th>
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Actions</th>
             </tr>
           </thead>
           <tbody className="bg-white divide-y divide-gray-200">
             {filteredFarmers.map((farmer) => (
-              <tr key={farmer.id}>
+              <tr
+                key={farmer.id}
+                className="hover:bg-gray-50 cursor-pointer transition-colors"
+                onClick={() => handleViewProfile(farmer)}
+              >
                 <td className="px-6 py-4 whitespace-nowrap">
                   <div className="text-sm font-medium text-gray-900">{farmer.name}</div>
                   <div className="text-sm text-gray-500">{farmer.email}</div>
@@ -506,8 +546,11 @@ export function Farmers() {
                 <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                   {farmer.phone}
                 </td>
-                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                  {farmer.location}
+                <td className="px-6 py-4 text-sm text-gray-500">
+                  {/* Show full address */}
+                  <div className="max-w-xs truncate" title={farmer.location}>
+                    {farmer.location}
+                  </div>
                 </td>
                 <td className="px-6 py-4">
                   <div className="flex flex-wrap gap-1">
@@ -531,37 +574,20 @@ export function Farmers() {
                 </td> */}
                 <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                   <div className="flex space-x-2">
-                    <button
-                      onClick={() => handleViewProfile(farmer)}
-                      className="text-green-600 hover:text-green-800 px-2 py-1 rounded flex items-center gap-1"
-                      title="View Full Profile"
-                    >
-                      <Eye className="h-4 w-4" />
-                      View
-                    </button>
-                    {/* <button
-                      onClick={() => handleEditFarmer(farmer)}
-                      className="text-blue-600 hover:text-blue-800 px-2 py-1 rounded"
-                    >
-                      Edit
-                    </button> */}
-                    <button
-                      onClick={() => toggleFeaturedStatus(farmer.id, farmer.name)}
-                      disabled={processingFeatured === farmer.id}
-                      className={`px-2 py-1 rounded text-sm flex items-center gap-1 ${
-                        featuredSellers.has(farmer.id)
-                          ? 'text-yellow-600 hover:text-yellow-700'
-                          : 'text-blue-600 hover:text-blue-700'
-                      }`}
-                    >
-                      <Star className={`h-3 w-3 ${featuredSellers.has(farmer.id) ? 'fill-current' : ''}`} />
-                      {processingFeatured === farmer.id
-                        ? 'Processing...'
-                        : featuredSellers.has(farmer.id)
-                          ? 'Remove Featured'
-                          : 'Add Featured'
-                      }
-                    </button>
+                    {/* Only show Remove Featured button for featured sellers */}
+                    {featuredSellers.has(farmer.id) && (
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation(); // Prevent row click
+                          toggleFeaturedStatus(farmer.id, farmer.name);
+                        }}
+                        disabled={processingFeatured === farmer.id}
+                        className="px-2 py-1 rounded text-sm flex items-center gap-1 text-yellow-600 hover:text-yellow-700"
+                      >
+                        <Star className="h-3 w-3 fill-current" />
+                        {processingFeatured === farmer.id ? 'Processing...' : 'Remove Featured'}
+                      </button>
+                    )}
                     {/* <select
                       value={farmer.status}
                       onChange={(e) => handleStatusChange(farmer.id, e.target.value as Farmer['status'])}
@@ -667,7 +693,13 @@ export function Farmers() {
           email: selectedFarmer.email,
           phone: selectedFarmer.phone,
           defaultMode: 'seller',
-          location: selectedFarmer.location,
+          address: selectedFarmer.fullAddress,
+          city: selectedFarmer.city,
+          state: selectedFarmer.state,
+          district: selectedFarmer.district,
+          country: selectedFarmer.country,
+          zipcode: selectedFarmer.zipcode,
+          coordinates: selectedFarmer.coordinates,
           registrationDate: selectedFarmer.registrationDate,
           store_name: selectedFarmer.name,
           store_description: selectedFarmer.description,

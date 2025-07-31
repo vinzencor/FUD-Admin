@@ -38,7 +38,7 @@ export function Sidebar() {
     { name: 'Cover page', to: `${basePath}/home`, icon: Home },
     { name: 'Database', to: `${basePath}/members`, icon: Users },
     { name: 'Buyers', to: `${basePath}/buyers`, icon: User },
-    { name: 'Farmers', to: `${basePath}/farmers`, icon: Store },
+    { name: 'Sellers', to: `${basePath}/farmers`, icon: Store },
     { name: 'Featured Sellers', to: `${basePath}/featured-sellers`, icon: Crown },
     // { name: 'PMA Members', to: `${basePath}/pma-members`, icon: Crown },
     { name: 'Orders', to: `${basePath}/orders`, icon: ShoppingBasket },

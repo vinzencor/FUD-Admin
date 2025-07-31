@@ -100,11 +100,11 @@ export function EnhancedAdminAssignment({
             <div className="flex items-center gap-3 mb-2">
               <Crown className="h-6 w-6 text-purple-600" />
               <h2 className="text-xl font-semibold text-gray-900">
-                Admin Assignment Center
+                Admin Regional Assignment Center
               </h2>
             </div>
             <p className="text-gray-600">
-              Assign admin roles to users with location-based access control
+              Assign Regional admin roles to users with location-based access control
             </p>
           </div>
           
@@ -124,7 +124,7 @@ export function EnhancedAdminAssignment({
       <div className="bg-white rounded-lg border border-gray-200 p-6">
         <h3 className="text-lg font-medium text-gray-900 mb-4 flex items-center gap-2">
           <UserPlus className="h-5 w-5 text-blue-600" />
-          Assign New Admin
+          Assign New Regional Admin
         </h3>
 
         <div className="space-y-4">

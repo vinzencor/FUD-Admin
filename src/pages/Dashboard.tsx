@@ -224,13 +224,13 @@ export function Dashboard() {
           description="Customer feedback"
           to={`${basePath}/feedback`}
         />
-        <StatCard
+        {/* <StatCard
           title="Reports"
           value={stats.reports}
           icon={FileText}
           description="Generated reports"
           to={`${basePath}/reports`}
-        />
+        /> */}
       </div>
 
       {/* Recent Orders Section */}

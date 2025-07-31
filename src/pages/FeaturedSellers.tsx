@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Search, Star, StarOff, Eye, X, MapPin, Clock, User, Store, Crown, RefreshCw, Filter } from 'lucide-react';
+import { Search, Star, StarOff, Eye, X, MapPin, Clock, User, Store, Crown, RefreshCw, Check } from 'lucide-react';
 import { useAuthStore } from '../store/authStore';
 import { supabase } from '../supabaseClient';
 
@@ -55,8 +55,9 @@ export function FeaturedSellers() {
   const [showProfileModal, setShowProfileModal] = useState(false);
   const [selectedUser, setSelectedUser] = useState<User | null>(null);
   const [selectedFeaturedSeller, setSelectedFeaturedSeller] = useState<FeaturedSeller | null>(null);
-  const [filterMode, setFilterMode] = useState<string>('all');
   const [processing, setProcessing] = useState<string | null>(null);
+  const [selectedUsers, setSelectedUsers] = useState<Set<string>>(new Set());
+  const [isPromoting, setIsPromoting] = useState(false);
 
   useEffect(() => {
     loadData();
@@ -90,6 +91,7 @@ export function FeaturedSellers() {
 
   const loadAllUsers = async () => {
     try {
+      // Only load users who are sellers (have seller profiles or default_mode includes seller)
       const { data: users, error: usersError } = await supabase
         .from('users')
         .select(`
@@ -104,6 +106,7 @@ export function FeaturedSellers() {
           profile_image
         `)
         .not('full_name', 'is', null)
+        .or('default_mode.eq.seller,default_mode.eq.both') // Only sellers or both
         .order('full_name');
 
       if (usersError) throw usersError;
@@ -173,22 +176,63 @@ export function FeaturedSellers() {
     toggleFeaturedStatus(user.id, `Promoted by ${user?.email}`);
   };
 
-  // Filter users for selection modal
+  // Multi-select handlers
+  const handleUserSelect = (userId: string) => {
+    const newSelected = new Set(selectedUsers);
+    if (newSelected.has(userId)) {
+      newSelected.delete(userId);
+    } else {
+      newSelected.add(userId);
+    }
+    setSelectedUsers(newSelected);
+  };
+
+  const handleSelectAll = () => {
+    if (selectedUsers.size === filteredUsers.length) {
+      setSelectedUsers(new Set());
+    } else {
+      setSelectedUsers(new Set(filteredUsers.map(user => user.id)));
+    }
+  };
+
+  const handlePromoteSelected = async () => {
+    if (selectedUsers.size === 0) return;
+
+    try {
+      setIsPromoting(true);
+      const selectedUsersList = filteredUsers.filter(user => selectedUsers.has(user.id));
+
+      // Promote users one by one
+      for (const user of selectedUsersList) {
+        await toggleFeaturedStatus(user.id, `Bulk promoted by ${user?.email}`);
+      }
+
+      // Clear selection and close modal
+      setSelectedUsers(new Set());
+      setShowUserModal(false);
+      alert(`Successfully promoted ${selectedUsers.size} seller(s) to featured!`);
+    } catch (error) {
+      console.error('Error promoting selected users:', error);
+      alert('Failed to promote some users. Please try again.');
+    } finally {
+      setIsPromoting(false);
+    }
+  };
+
+  // Filter users for selection modal - Only sellers
   const filteredUsers = allUsers.filter(u => {
-    const matchesSearch = searchTerm === '' || 
+    const matchesSearch = searchTerm === '' ||
       u.full_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
       u.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
       (u.store_name && u.store_name.toLowerCase().includes(searchTerm.toLowerCase()));
 
-    const matchesFilter = filterMode === 'all' || 
-      (filterMode === 'buyers' && (u.default_mode === 'buyer' || u.default_mode === 'both')) ||
-      (filterMode === 'sellers' && (u.default_mode === 'seller' || u.default_mode === 'both')) ||
-      (filterMode === 'approved_sellers' && u.seller_approved);
+    // Only show sellers (users with default_mode 'seller' or 'both')
+    const isSeller = u.default_mode === 'seller' || u.default_mode === 'both';
 
     // Exclude already featured users
     const isNotFeatured = !featuredSellers.some(fs => fs.user_id === u.id && fs.is_active);
 
-    return matchesSearch && matchesFilter && isNotFeatured;
+    return matchesSearch && isSeller && isNotFeatured;
   });
 
   if (loading) {
@@ -224,11 +268,15 @@ export function FeaturedSellers() {
           </button>
 
           <button
-            onClick={() => setShowUserModal(true)}
+            onClick={() => {
+              setShowUserModal(true);
+              setSelectedUsers(new Set());
+              setSearchTerm('');
+            }}
             className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
           >
             <Crown className="h-4 w-4" />
-            Add Featured Seller
+            Add Featured Sellers
           </button>
         </div>
       </div>
@@ -241,11 +289,15 @@ export function FeaturedSellers() {
             <h3 className="text-lg font-medium text-gray-900 mb-2">No featured sellers</h3>
             <p className="text-gray-500 mb-4">Start by promoting users to featured sellers</p>
             <button
-              onClick={() => setShowUserModal(true)}
+              onClick={() => {
+                setShowUserModal(true);
+                setSelectedUsers(new Set());
+                setSearchTerm('');
+              }}
               className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
             >
               <Crown className="h-4 w-4" />
-              Add First Featured Seller
+              Add Featured Sellers
             </button>
           </div>
         ) : (
@@ -364,9 +416,17 @@ export function FeaturedSellers() {
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
           <div className="bg-white rounded-lg max-w-4xl w-full max-h-[90vh] overflow-y-auto">
             <div className="flex items-center justify-between p-6 border-b border-gray-200">
-              <h2 className="text-xl font-semibold text-gray-900">Select User to Feature</h2>
+              <div>
+                <h2 className="text-xl font-semibold text-gray-900">Select Sellers to Feature</h2>
+                <p className="text-sm text-gray-600 mt-1">
+                  {selectedUsers.size > 0 ? `${selectedUsers.size} seller(s) selected` : 'Select sellers to promote as featured'}
+                </p>
+              </div>
               <button
-                onClick={() => setShowUserModal(false)}
+                onClick={() => {
+                  setShowUserModal(false);
+                  setSelectedUsers(new Set());
+                }}
                 className="text-gray-400 hover:text-gray-600"
               >
                 <X className="h-6 w-6" />
@@ -375,27 +435,33 @@ export function FeaturedSellers() {
 
             <div className="p-6">
               {/* Search and Filter */}
-              <div className="flex flex-col sm:flex-row gap-4 mb-6">
-                <div className="flex-1 relative">
+              <div className="mb-6">
+                <div className="relative">
                   <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
                   <input
                     type="text"
-                    placeholder="Search users by name, email, or store name..."
+                    placeholder="Search sellers by name, email, or store name..."
                     value={searchTerm}
                     onChange={(e) => setSearchTerm(e.target.value)}
                     className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                   />
                 </div>
-                <select
-                  value={filterMode}
-                  onChange={(e) => setFilterMode(e.target.value)}
-                  className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                >
-                  <option value="all">All Users</option>
-                  <option value="buyers">Buyers Only</option>
-                  <option value="sellers">Sellers Only</option>
-                  <option value="approved_sellers">Approved Sellers</option>
-                </select>
+                <div className="flex items-center justify-between mt-4">
+                  <p className="text-sm text-gray-600">
+                    Only sellers are shown in this list. Buyers cannot be featured.
+                  </p>
+                  {filteredUsers.length > 0 && (
+                    <label className="flex items-center gap-2 text-sm text-gray-700 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={selectedUsers.size === filteredUsers.length && filteredUsers.length > 0}
+                        onChange={handleSelectAll}
+                        className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                      />
+                      Select All ({filteredUsers.length})
+                    </label>
+                  )}
+                </div>
               </div>
 
               {/* Users List */}
@@ -404,18 +470,28 @@ export function FeaturedSellers() {
                   <div className="text-center py-8">
                     <User className="h-12 w-12 text-gray-400 mx-auto mb-4" />
                     <p className="text-gray-500">
-                      {searchTerm || filterMode !== 'all'
-                        ? 'No users match your search criteria'
-                        : 'All eligible users are already featured'}
+                      {searchTerm
+                        ? 'No sellers match your search criteria'
+                        : 'All eligible sellers are already featured'}
                     </p>
                   </div>
                 ) : (
                   filteredUsers.map((user) => (
                     <div
                       key={user.id}
-                      className="flex items-center justify-between p-4 border border-gray-200 rounded-lg hover:bg-gray-50"
+                      className={`flex items-center justify-between p-4 border rounded-lg transition-colors ${
+                        selectedUsers.has(user.id)
+                          ? 'border-blue-300 bg-blue-50'
+                          : 'border-gray-200 hover:bg-gray-50'
+                      }`}
                     >
                       <div className="flex items-center space-x-3">
+                        <input
+                          type="checkbox"
+                          checked={selectedUsers.has(user.id)}
+                          onChange={() => handleUserSelect(user.id)}
+                          className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                        />
                         <div className="h-10 w-10 rounded-full bg-gray-100 flex items-center justify-center">
                           {user.profile_image ? (
                             <img
@@ -448,17 +524,52 @@ export function FeaturedSellers() {
                           </div>
                         </div>
                       </div>
-                      <button
-                        onClick={() => handlePromoteUser(user)}
-                        disabled={processing === user.id}
-                        className="inline-flex items-center px-3 py-2 border border-transparent rounded-md text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 disabled:opacity-50"
-                      >
-                        <Star className="h-4 w-4 mr-1" />
-                        {processing === user.id ? 'Featuring...' : 'Feature'}
-                      </button>
+                      <div className="flex items-center gap-2">
+                        {selectedUsers.has(user.id) && (
+                          <div className="flex items-center text-blue-600">
+                            <Check className="h-4 w-4 mr-1" />
+                            <span className="text-sm font-medium">Selected</span>
+                          </div>
+                        )}
+                      </div>
                     </div>
                   ))
                 )}
+              </div>
+
+              {/* Action Buttons */}
+              <div className="flex items-center justify-between pt-6 border-t border-gray-200">
+                <div className="text-sm text-gray-600">
+                  {selectedUsers.size > 0 ? (
+                    <span className="font-medium text-blue-600">
+                      {selectedUsers.size} seller(s) selected for promotion
+                    </span>
+                  ) : (
+                    'Select sellers to promote as featured'
+                  )}
+                </div>
+                <div className="flex gap-3">
+                  <button
+                    onClick={() => {
+                      setShowUserModal(false);
+                      setSelectedUsers(new Set());
+                    }}
+                    className="px-4 py-2 text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={handlePromoteSelected}
+                    disabled={selectedUsers.size === 0 || isPromoting}
+                    className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                  >
+                    <Crown className="h-4 w-4" />
+                    {isPromoting
+                      ? `Promoting ${selectedUsers.size} seller(s)...`
+                      : `Promote ${selectedUsers.size} seller(s)`
+                    }
+                  </button>
+                </div>
               </div>
             </div>
           </div>
