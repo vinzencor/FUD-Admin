@@ -27,7 +27,18 @@ interface Farmer {
   certifications?: string[];
   fullAddress?: string;
   coordinates?: any;
-  // Individual address fields
+  // Business address fields (from seller profile)
+  business_street_address?: string;
+  business_apartment_unit?: string;
+  business_city?: string;
+  business_state?: string;
+  business_district?: string;
+  business_country?: string;
+  business_zipcode?: string;
+  business_coordinates?: any;
+  // Individual address fields (personal - fallback)
+  street_address?: string;
+  apartment_unit?: string;
   city?: string;
   state?: string;
   district?: string;
@@ -153,7 +164,67 @@ export function Farmers() {
         description: seller.description,
         fullAddress: seller.user_full_address,
         coordinates: seller.user_coordinates,
-        // Individual address fields
+        // Business address fields (from seller profile) - preferred for farmers
+        business_street_address: (() => {
+          try {
+            const address = typeof seller.address === 'string' ? JSON.parse(seller.address) : seller.address;
+            return address?.street || address?.street_address;
+          } catch {
+            return undefined;
+          }
+        })(),
+        business_apartment_unit: (() => {
+          try {
+            const address = typeof seller.address === 'string' ? JSON.parse(seller.address) : seller.address;
+            return address?.apartment_unit || address?.unit;
+          } catch {
+            return undefined;
+          }
+        })(),
+        business_city: (() => {
+          try {
+            const address = typeof seller.address === 'string' ? JSON.parse(seller.address) : seller.address;
+            return address?.city;
+          } catch {
+            return undefined;
+          }
+        })(),
+        business_state: (() => {
+          try {
+            const address = typeof seller.address === 'string' ? JSON.parse(seller.address) : seller.address;
+            return address?.state;
+          } catch {
+            return undefined;
+          }
+        })(),
+        business_district: (() => {
+          try {
+            const address = typeof seller.address === 'string' ? JSON.parse(seller.address) : seller.address;
+            return address?.district;
+          } catch {
+            return undefined;
+          }
+        })(),
+        business_country: (() => {
+          try {
+            const address = typeof seller.address === 'string' ? JSON.parse(seller.address) : seller.address;
+            return address?.country;
+          } catch {
+            return undefined;
+          }
+        })(),
+        business_zipcode: (() => {
+          try {
+            const address = typeof seller.address === 'string' ? JSON.parse(seller.address) : seller.address;
+            return address?.zipcode || address?.postal_code;
+          } catch {
+            return undefined;
+          }
+        })(),
+        business_coordinates: seller.coordinates,
+        // Individual address fields (personal - fallback)
+        street_address: seller.user_street_address,
+        apartment_unit: seller.user_apartment_unit,
         city: seller.user_city,
         state: seller.user_state,
         district: seller.user_district,
@@ -694,12 +765,41 @@ export function Farmers() {
           phone: selectedFarmer.phone,
           defaultMode: 'seller',
           address: selectedFarmer.fullAddress,
+          // Personal address fields (fallback)
+          street_address: selectedFarmer.street_address,
+          apartment_unit: selectedFarmer.apartment_unit,
           city: selectedFarmer.city,
           state: selectedFarmer.state,
           district: selectedFarmer.district,
           country: selectedFarmer.country,
           zipcode: selectedFarmer.zipcode,
-          coordinates: selectedFarmer.coordinates,
+          // Business address fields (primary for farmers)
+          has_business_address: !!(
+            selectedFarmer.business_street_address ||
+            selectedFarmer.business_city ||
+            selectedFarmer.business_state ||
+            selectedFarmer.business_country
+          ),
+          business_address: (() => {
+            const parts = [
+              selectedFarmer.business_street_address,
+              selectedFarmer.business_apartment_unit,
+              selectedFarmer.business_city,
+              selectedFarmer.business_district,
+              selectedFarmer.business_state,
+              selectedFarmer.business_country,
+              selectedFarmer.business_zipcode
+            ].filter(Boolean);
+            return parts.length > 0 ? parts.join(', ') : undefined;
+          })(),
+          business_street_address: selectedFarmer.business_street_address,
+          business_apartment_unit: selectedFarmer.business_apartment_unit,
+          business_city: selectedFarmer.business_city,
+          business_state: selectedFarmer.business_state,
+          business_district: selectedFarmer.business_district,
+          business_country: selectedFarmer.business_country,
+          business_zipcode: selectedFarmer.business_zipcode,
+          coordinates: selectedFarmer.business_coordinates || selectedFarmer.coordinates,
           registrationDate: selectedFarmer.registrationDate,
           store_name: selectedFarmer.name,
           store_description: selectedFarmer.description,

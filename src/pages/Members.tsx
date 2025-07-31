@@ -1210,6 +1210,8 @@ export function Members() {
           defaultMode: selectedMember.defaultMode,
           role: selectedMember.role,
           address: selectedMember.fullAddress,
+          street_address: selectedMember.street_address,
+          apartment_unit: selectedMember.apartment_unit,
           city: selectedMember.city,
           state: selectedMember.state,
           district: selectedMember.district,
