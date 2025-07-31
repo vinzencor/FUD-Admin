@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Search, MoreVertical, Edit, Trash2, Crown, Store, Download, AlertTriangle, CheckCircle, Star } from 'lucide-react';
+import { Search, MoreVertical, Trash2, Crown, Store, Download, AlertTriangle, CheckCircle, Star } from 'lucide-react';
 import { format, addMonths } from 'date-fns';
 
 import { Button } from '../components/ui/button';
@@ -40,6 +40,16 @@ interface Member {
     storeName?: string;
     isApproved?: boolean;
   };
+  fullAddress?: string;
+  coordinates?: any;
+  // Individual address fields
+  street_address?: string;
+  apartment_unit?: string;
+  city?: string;
+  state?: string;
+  district?: string;
+  country?: string;
+  zipcode?: string;
 }
 
 
@@ -136,7 +146,7 @@ export function Members() {
         try {
           let userQuery = supabase
             .from('users')
-            .select('id, full_name, email, mobile_phone, country, state, city, created_at, default_mode, role, admin_assigned_location');
+            .select('id, full_name, email, mobile_phone, street_address, apartment_unit, city, state, district, country, zip_code, postal_code, coordinates, created_at, default_mode, role, admin_assigned_location');
 
           // Apply location filter for regional admins
           if (adminLocation) {
@@ -151,7 +161,7 @@ export function Members() {
           console.log('Role column might not exist, trying without it...');
           let fallbackQuery = supabase
             .from('users')
-            .select('id, full_name, email, mobile_phone, country, state, city, created_at, default_mode');
+            .select('id, full_name, email, mobile_phone, street_address, apartment_unit, city, state, district, country, zip_code, postal_code, coordinates, created_at, default_mode');
 
           // Apply location filter for regional admins even in fallback
           if (adminLocation) {
@@ -202,13 +212,27 @@ export function Members() {
             defaultMode = 'buyer';
           }
 
+          // Build full address string from all available fields
+          const addressParts = [
+            row.street_address,
+            row.apartment_unit,
+            row.city,
+            row.district,
+            row.state,
+            row.country,
+            row.postal_code || row.zip_code
+          ].filter(Boolean);
+
+          const fullAddress = addressParts.length > 0 ? addressParts.join(', ') : 'Address not provided';
+          const shortLocation = `${row.city || ''}, ${row.state || ''}`.replace(/^,\s*|,\s*$/g, '');
+
           return {
             id: row.id,
             name: row.full_name || 'Unknown',
             email: row.email || '',
             phone: row.mobile_phone || '',
             status: 'active' as 'active',
-            location: `${row.city || ''}, ${row.state || ''}`,
+            location: shortLocation || 'Location not provided',
             joinDate: row.created_at,
             lastActive: row.created_at,
             defaultMode: defaultMode,
@@ -217,7 +241,18 @@ export function Members() {
             sellerInfo: sellerProfile ? {
               storeName: sellerProfile.store_name,
               isApproved: sellerProfile.is_approved
-            } : undefined
+            } : undefined,
+            // Full address for modal display
+            fullAddress: fullAddress,
+            coordinates: row.coordinates,
+            // Individual address fields
+            street_address: row.street_address,
+            apartment_unit: row.apartment_unit,
+            city: row.city,
+            state: row.state,
+            district: row.district,
+            country: row.country,
+            zipcode: row.postal_code || row.zip_code
           };
         });
 
@@ -548,7 +583,6 @@ export function Members() {
                 <option value="all">All User Types</option>
                 <option value="buyer">Buyers Only</option>
                 <option value="seller">Sellers Only</option>
-                <option value="both">Buyer & Seller</option>
               </select>
 
             </div>
@@ -577,7 +611,11 @@ export function Members() {
               {filteredMembers.map((member) => (
               <div
                 key={member.id}
-                className="bg-gray-50 rounded-lg p-4 border border-gray-200"
+                className="bg-gray-50 rounded-lg p-4 border border-gray-200 cursor-pointer hover:bg-gray-100 transition-colors"
+                onClick={() => {
+                  setSelectedMember(member);
+                  setShowProfileModal(true);
+                }}
               >
                 <div className="flex items-start justify-between mb-3">
                   <div className="flex-1">
@@ -593,8 +631,8 @@ export function Members() {
                     <span className="text-gray-900">{member.phone}</span>
                   </div>
                   <div className="flex justify-between">
-                    <span className="text-gray-500">Location:</span>
-                    <span className="text-gray-900">{member.location}</span>
+                    <span className="text-gray-500">Address:</span>
+                    <span className="text-gray-900 text-right">{member.location}</span>
                   </div>
                   <div className="flex justify-between items-center">
                     <span className="text-gray-500">Type:</span>
@@ -635,29 +673,16 @@ export function Members() {
                   </div>
                 ) : user?.role === 'super_admin' ? (
                   <div className="mt-3 space-y-2">
-                    {/* View Profile Button - Always available */}
-                    <div className="flex justify-center">
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => {
-                          setSelectedMember(member);
-                          setShowProfileModal(true);
-                        }}
-                        className="flex items-center gap-1 text-xs min-w-[100px]"
-                      >
-                        <Edit className="h-3 w-3" />
-                        View Profile
-                      </Button>
-                    </div>
-
                     {/* Featured Seller Button - Only for sellers */}
                     {member.isSeller && (
                       <div className="flex justify-center">
                         <Button
                           variant="outline"
                           size="sm"
-                          onClick={() => toggleFeaturedStatus(member.id, member.name)}
+                          onClick={(e) => {
+                            e.stopPropagation(); // Prevent card click
+                            toggleFeaturedStatus(member.id, member.name);
+                          }}
                           disabled={processingFeatured === member.id}
                           className={`flex items-center gap-1 text-xs min-w-[120px] ${
                             featuredSellers.has(member.id)
@@ -682,7 +707,10 @@ export function Members() {
                         <Button
                           variant="outline"
                           size="sm"
-                          onClick={() => handlePromoteToAdmin(member)}
+                          onClick={(e) => {
+                            e.stopPropagation(); // Prevent card click
+                            handlePromoteToAdmin(member);
+                          }}
                           className="flex items-center gap-1 text-purple-600 hover:text-purple-700 text-xs min-w-[160px]"
                         >
                           <Crown className="h-3 w-3" />
@@ -696,7 +724,10 @@ export function Members() {
                         <Button
                           variant="outline"
                           size="sm"
-                          onClick={() => handleEditAdminLocation(member)}
+                          onClick={(e) => {
+                            e.stopPropagation(); // Prevent card click
+                            handleEditAdminLocation(member);
+                          }}
                           className="flex items-center gap-1 text-blue-600 hover:text-blue-700 text-xs min-w-[120px]"
                         >
                           <Crown className="h-3 w-3" />
@@ -710,7 +741,10 @@ export function Members() {
                       <Button
                         variant="outline"
                         size="sm"
-                        onClick={() => handleDeleteMember(member.id)}
+                        onClick={(e) => {
+                          e.stopPropagation(); // Prevent card click
+                          handleDeleteMember(member.id);
+                        }}
                         className="flex items-center gap-1 text-red-600 hover:text-red-700 text-xs min-w-[80px]"
                       >
                         <Trash2 className="h-3 w-3" />
@@ -754,7 +788,7 @@ export function Members() {
                       <div className="text-xs font-medium text-gray-500 uppercase tracking-wider">Contact</div>
                     </th>
                     <th className="px-6 py-3 text-left">
-                      <div className="text-xs font-medium text-gray-500 uppercase tracking-wider">Location</div>
+                      <div className="text-xs font-medium text-gray-500 uppercase tracking-wider">Address</div>
                     </th>
                     <th className="px-6 py-3 text-left">
                       <div className="text-xs font-medium text-gray-500 uppercase tracking-wider">User Type</div>
@@ -775,7 +809,11 @@ export function Members() {
               {filteredMembers.map((member) => (
                 <tr
                   key={member.id}
-                  className="hover:bg-gray-50 transition-colors"
+                  className="hover:bg-gray-50 transition-colors cursor-pointer"
+                  onClick={() => {
+                    setSelectedMember(member);
+                    setShowProfileModal(true);
+                  }}
                 >
                   <td className="px-6 py-4">
                     <div className="flex items-center">
@@ -833,26 +871,15 @@ export function Members() {
                       // Super admin has full access
                       expandedRowId === member.id ? (
                         <div className="flex flex-col items-center gap-2 py-2">
-                          {/* View Profile Button - Always available */}
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => {
-                              setSelectedMember(member);
-                              setShowProfileModal(true);
-                            }}
-                            className="flex items-center gap-1 min-w-[110px]"
-                          >
-                            <Edit className="h-3 w-3" />
-                            View Profile
-                          </Button>
-
                           {/* Featured Seller Button - Only for sellers */}
                           {member.isSeller && (
                             <Button
                               variant="outline"
                               size="sm"
-                              onClick={() => toggleFeaturedStatus(member.id, member.name)}
+                              onClick={(e) => {
+                                e.stopPropagation(); // Prevent row click
+                                toggleFeaturedStatus(member.id, member.name);
+                              }}
                               disabled={processingFeatured === member.id}
                               className={`flex items-center gap-1 min-w-[130px] ${
                                 featuredSellers.has(member.id)
@@ -875,7 +902,10 @@ export function Members() {
                             <Button
                               variant="outline"
                               size="sm"
-                              onClick={() => handlePromoteToAdmin(member)}
+                              onClick={(e) => {
+                                e.stopPropagation(); // Prevent row click
+                                handlePromoteToAdmin(member);
+                              }}
                               className="flex items-center gap-1 text-purple-600 hover:text-purple-700 min-w-[160px]"
                             >
                               <Crown className="h-3 w-3" />
@@ -887,7 +917,10 @@ export function Members() {
                             <Button
                               variant="outline"
                               size="sm"
-                              onClick={() => handleEditAdminLocation(member)}
+                              onClick={(e) => {
+                                e.stopPropagation(); // Prevent row click
+                                handleEditAdminLocation(member);
+                              }}
                               className="flex items-center gap-1 text-blue-600 hover:text-blue-700 min-w-[120px]"
                             >
                               <Crown className="h-3 w-3" />
@@ -899,7 +932,10 @@ export function Members() {
                           <Button
                             variant="outline"
                             size="sm"
-                            onClick={() => handleDeleteMember(member.id)}
+                            onClick={(e) => {
+                              e.stopPropagation(); // Prevent row click
+                              handleDeleteMember(member.id);
+                            }}
                             className="flex items-center gap-1 text-red-600 hover:text-red-700 min-w-[80px]"
                           >
                             <Trash2 className="h-3 w-3" />
@@ -908,7 +944,10 @@ export function Members() {
                           <Button
                             variant="ghost"
                             size="sm"
-                            onClick={() => setExpandedRowId(null)}
+                            onClick={(e) => {
+                              e.stopPropagation(); // Prevent row click
+                              setExpandedRowId(null);
+                            }}
                           >
                             Cancel
                           </Button>
@@ -918,7 +957,10 @@ export function Members() {
                           variant="ghost"
                           size="sm"
                           className="h-8 w-8 p-0"
-                          onClick={() => setExpandedRowId(member.id)}
+                          onClick={(e) => {
+                            e.stopPropagation(); // Prevent row click
+                            setExpandedRowId(member.id);
+                          }}
                         >
                           <MoreVertical className="h-4 w-4" />
                         </Button>
@@ -1167,7 +1209,13 @@ export function Members() {
           phone: selectedMember.phone,
           defaultMode: selectedMember.defaultMode,
           role: selectedMember.role,
-          location: selectedMember.location,
+          address: selectedMember.fullAddress,
+          city: selectedMember.city,
+          state: selectedMember.state,
+          district: selectedMember.district,
+          country: selectedMember.country,
+          zipcode: selectedMember.zipcode,
+          coordinates: selectedMember.coordinates,
           registrationDate: selectedMember.joinDate,
           lastActive: selectedMember.lastActive,
           store_name: selectedMember.sellerInfo?.storeName,

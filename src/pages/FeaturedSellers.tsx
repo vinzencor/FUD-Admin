@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Search, Star, StarOff, Eye, X, MapPin, Clock, User, Store, Crown, RefreshCw, Filter } from 'lucide-react';
+import { Search, Star, StarOff, Eye, X, MapPin, Clock, User, Store, Crown, RefreshCw } from 'lucide-react';
 import { useAuthStore } from '../store/authStore';
 import { supabase } from '../supabaseClient';
 
@@ -55,7 +55,6 @@ export function FeaturedSellers() {
   const [showProfileModal, setShowProfileModal] = useState(false);
   const [selectedUser, setSelectedUser] = useState<User | null>(null);
   const [selectedFeaturedSeller, setSelectedFeaturedSeller] = useState<FeaturedSeller | null>(null);
-  const [filterMode, setFilterMode] = useState<string>('all');
   const [processing, setProcessing] = useState<string | null>(null);
 
   useEffect(() => {
@@ -90,6 +89,7 @@ export function FeaturedSellers() {
 
   const loadAllUsers = async () => {
     try {
+      // Only load users who are sellers (have seller profiles or default_mode includes seller)
       const { data: users, error: usersError } = await supabase
         .from('users')
         .select(`
@@ -104,6 +104,7 @@ export function FeaturedSellers() {
           profile_image
         `)
         .not('full_name', 'is', null)
+        .or('default_mode.eq.seller,default_mode.eq.both') // Only sellers or both
         .order('full_name');
 
       if (usersError) throw usersError;
@@ -173,22 +174,20 @@ export function FeaturedSellers() {
     toggleFeaturedStatus(user.id, `Promoted by ${user?.email}`);
   };
 
-  // Filter users for selection modal
+  // Filter users for selection modal - Only sellers
   const filteredUsers = allUsers.filter(u => {
-    const matchesSearch = searchTerm === '' || 
+    const matchesSearch = searchTerm === '' ||
       u.full_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
       u.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
       (u.store_name && u.store_name.toLowerCase().includes(searchTerm.toLowerCase()));
 
-    const matchesFilter = filterMode === 'all' || 
-      (filterMode === 'buyers' && (u.default_mode === 'buyer' || u.default_mode === 'both')) ||
-      (filterMode === 'sellers' && (u.default_mode === 'seller' || u.default_mode === 'both')) ||
-      (filterMode === 'approved_sellers' && u.seller_approved);
+    // Only show sellers (users with default_mode 'seller' or 'both')
+    const isSeller = u.default_mode === 'seller' || u.default_mode === 'both';
 
     // Exclude already featured users
     const isNotFeatured = !featuredSellers.some(fs => fs.user_id === u.id && fs.is_active);
 
-    return matchesSearch && matchesFilter && isNotFeatured;
+    return matchesSearch && isSeller && isNotFeatured;
   });
 
   if (loading) {
@@ -375,27 +374,20 @@ export function FeaturedSellers() {
 
             <div className="p-6">
               {/* Search and Filter */}
-              <div className="flex flex-col sm:flex-row gap-4 mb-6">
-                <div className="flex-1 relative">
+              <div className="mb-6">
+                <div className="relative">
                   <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
                   <input
                     type="text"
-                    placeholder="Search users by name, email, or store name..."
+                    placeholder="Search sellers by name, email, or store name..."
                     value={searchTerm}
                     onChange={(e) => setSearchTerm(e.target.value)}
                     className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                   />
                 </div>
-                <select
-                  value={filterMode}
-                  onChange={(e) => setFilterMode(e.target.value)}
-                  className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                >
-                  <option value="all">All Users</option>
-                  <option value="buyers">Buyers Only</option>
-                  <option value="sellers">Sellers Only</option>
-                  <option value="approved_sellers">Approved Sellers</option>
-                </select>
+                <p className="text-sm text-gray-600 mt-2">
+                  Only sellers are shown in this list. Buyers cannot be featured.
+                </p>
               </div>
 
               {/* Users List */}
@@ -404,9 +396,9 @@ export function FeaturedSellers() {
                   <div className="text-center py-8">
                     <User className="h-12 w-12 text-gray-400 mx-auto mb-4" />
                     <p className="text-gray-500">
-                      {searchTerm || filterMode !== 'all'
-                        ? 'No users match your search criteria'
-                        : 'All eligible users are already featured'}
+                      {searchTerm
+                        ? 'No sellers match your search criteria'
+                        : 'All eligible sellers are already featured'}
                     </p>
                   </div>
                 ) : (

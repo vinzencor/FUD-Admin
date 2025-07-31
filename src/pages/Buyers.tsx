@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Search, Filter, Download, RefreshCw, Eye, MapPin, Calendar, Phone, User } from 'lucide-react';
+import { Search, Filter, Download, RefreshCw, MapPin, Calendar, Phone, User } from 'lucide-react';
 import { fetchUsersWithAddresses, UserAddressData } from '../services/dataService';
 import { exportWithLoading, generateFilename, formatDateForExport } from '../utils/exportUtils';
 import { useAuthStore } from '../store/authStore';
@@ -21,9 +21,12 @@ interface Buyer {
   defaultMode: string;
   registrationDate: string;
   lastActive: string;
-  address?: string;
+  fullAddress?: string;
+  coordinates?: any;
+  // Individual address fields
   city?: string;
   state?: string;
+  district?: string;
   country?: string;
   zipcode?: string;
 }
@@ -99,9 +102,12 @@ export function Buyers() {
           defaultMode: userData.defaultMode || 'buyer',
           registrationDate: userData.created_at || '',
           lastActive: userData.created_at || '', // UserAddressData doesn't have last_sign_in_at
-          address: userData.address,
+          fullAddress: userData.full_address,
+          coordinates: userData.coordinates,
+          // Individual address fields
           city: userData.city,
           state: userData.state,
+          district: userData.district,
           country: userData.country,
           zipcode: userData.zipcode
         }));
@@ -140,13 +146,10 @@ export function Buyers() {
           email: buyer.email,
           phone: buyer.phone,
           location: buyer.location,
+          full_address: buyer.fullAddress || buyer.location,
           default_mode: buyer.defaultMode,
           registration_date: formatDateForExport(buyer.registrationDate),
-          last_active: formatDateForExport(buyer.lastActive),
-          city: buyer.city || '',
-          state: buyer.state || '',
-          country: buyer.country || '',
-          zipcode: buyer.zipcode || ''
+          last_active: formatDateForExport(buyer.lastActive)
         }))
       ),
       exportColumns,
@@ -288,7 +291,11 @@ export function Buyers() {
             <div className="block sm:hidden">
               <div className="divide-y divide-gray-200">
                 {filteredBuyers.map((buyer) => (
-                  <div key={buyer.id} className="p-4 space-y-3">
+                  <div
+                    key={buyer.id}
+                    className="p-4 space-y-3 cursor-pointer hover:bg-gray-50 transition-colors"
+                    onClick={() => handleViewProfile(buyer)}
+                  >
                     <div className="flex items-center justify-between">
                       <div className="flex items-center space-x-3">
                         <div className="h-10 w-10 rounded-full bg-blue-100 flex items-center justify-center">
@@ -317,22 +324,12 @@ export function Buyers() {
                       </div>
                       <div className="flex items-center text-gray-600">
                         <MapPin className="h-3 w-3 mr-2" />
-                        {buyer.location}
+                        {buyer.fullAddress || buyer.location}
                       </div>
                       <div className="flex items-center text-gray-600">
                         <Calendar className="h-3 w-3 mr-2" />
                         Registered: {new Date(buyer.registrationDate).toLocaleDateString()}
                       </div>
-                    </div>
-
-                    <div className="flex justify-center">
-                      <button
-                        onClick={() => handleViewProfile(buyer)}
-                        className="inline-flex items-center px-3 py-1 border border-gray-300 rounded-md text-sm font-medium text-gray-700 bg-white hover:bg-gray-50"
-                      >
-                        <Eye className="h-4 w-4 mr-1" />
-                        View Profile
-                      </button>
                     </div>
                   </div>
                 ))}
@@ -351,7 +348,7 @@ export function Buyers() {
                       Contact
                     </th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Location
+                      Address
                     </th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                       Mode
@@ -359,14 +356,15 @@ export function Buyers() {
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                       Registration
                     </th>
-                    <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Actions
-                    </th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-200 bg-white">
                   {filteredBuyers.map((buyer) => (
-                    <tr key={buyer.id} className="hover:bg-gray-50">
+                    <tr
+                      key={buyer.id}
+                      className="hover:bg-gray-50 cursor-pointer transition-colors"
+                      onClick={() => handleViewProfile(buyer)}
+                    >
                       <td className="px-6 py-4">
                         <div className="flex items-center">
                           <div className="h-10 w-10 flex-shrink-0">
@@ -385,7 +383,9 @@ export function Buyers() {
                         <div className="text-sm text-gray-500">{buyer.phone || 'No phone'}</div>
                       </td>
                       <td className="px-6 py-4">
-                        <div className="text-sm text-gray-900">{buyer.location}</div>
+                        <div className="text-sm text-gray-900">
+                          {buyer.fullAddress || buyer.location}
+                        </div>
                       </td>
                       <td className="px-6 py-4">
                         <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
@@ -406,15 +406,6 @@ export function Buyers() {
                           Last active: {new Date(buyer.lastActive).toLocaleDateString()}
                         </div>
                       </td>
-                      <td className="px-6 py-4 text-center">
-                        <button
-                          onClick={() => handleViewProfile(buyer)}
-                          className="inline-flex items-center px-3 py-1 border border-gray-300 rounded-md text-sm font-medium text-gray-700 bg-white hover:bg-gray-50"
-                        >
-                          <Eye className="h-4 w-4 mr-1" />
-                          View Profile
-                        </button>
-                      </td>
                     </tr>
                   ))}
                 </tbody>
@@ -434,12 +425,13 @@ export function Buyers() {
           email: selectedBuyer.email,
           phone: selectedBuyer.phone,
           defaultMode: selectedBuyer.defaultMode,
-          address: selectedBuyer.address,
+          address: selectedBuyer.fullAddress,
           city: selectedBuyer.city,
           state: selectedBuyer.state,
+          district: selectedBuyer.district,
           country: selectedBuyer.country,
           zipcode: selectedBuyer.zipcode,
-          location: selectedBuyer.location,
+          coordinates: selectedBuyer.coordinates,
           registrationDate: selectedBuyer.registrationDate,
           lastActive: selectedBuyer.lastActive
         } : null}

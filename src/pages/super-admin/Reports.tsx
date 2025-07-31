@@ -23,6 +23,11 @@ export function Reports() {
   const [message, setMessage] = useState<string | null>(null);
   const [adminLocation, setAdminLocation] = useState<AdminLocation | null>(null);
 
+  // Date range states
+  const [startDate, setStartDate] = useState<string>('');
+  const [endDate, setEndDate] = useState<string>('');
+  const [dateRangeEnabled, setDateRangeEnabled] = useState(false);
+
   // Data states
   const [farmerData, setFarmerData] = useState<ReportData[]>([]);
   const [locationData, setLocationData] = useState<{
@@ -38,7 +43,7 @@ export function Reports() {
     if (adminLocation !== undefined) { // Wait for location to be loaded (null is valid for super admin)
       loadReportData();
     }
-  }, [adminLocation]);
+  }, [adminLocation, startDate, endDate, dateRangeEnabled]);
 
   const loadAdminLocation = async () => {
     try {
@@ -63,9 +68,15 @@ export function Reports() {
 
       console.log('Loading real report data...');
 
+      // Prepare date range parameters
+      const dateRangeParams = dateRangeEnabled && startDate && endDate ? {
+        startDate,
+        endDate
+      } : undefined;
+
       const [farmers, locations] = await Promise.all([
-        fetchFarmerRevenueData(adminLocation),
-        fetchLocationStats(adminLocation)
+        fetchFarmerRevenueData(adminLocation, dateRangeParams),
+        fetchLocationStats(adminLocation, dateRangeParams)
       ]);
 
       console.log('Loaded farmers data:', farmers.length);
@@ -219,6 +230,53 @@ export function Reports() {
             </div>
           ) : null}
         </div>
+
+        {/* Date Range Filter */}
+        <div className="flex items-center gap-4 bg-gray-50 p-4 rounded-lg">
+          <div className="flex items-center gap-2">
+            <input
+              type="checkbox"
+              id="dateRangeEnabled"
+              checked={dateRangeEnabled}
+              onChange={(e) => setDateRangeEnabled(e.target.checked)}
+              className="rounded border-gray-300 text-primary-600 focus:ring-primary-500"
+            />
+            <label htmlFor="dateRangeEnabled" className="text-sm font-medium text-gray-700">
+              Filter by Date Range
+            </label>
+          </div>
+
+          {dateRangeEnabled && (
+            <div className="flex items-center gap-4">
+              <div className="flex items-center gap-2">
+                <label htmlFor="startDate" className="text-sm text-gray-600">From:</label>
+                <input
+                  type="date"
+                  id="startDate"
+                  value={startDate}
+                  onChange={(e) => setStartDate(e.target.value)}
+                  className="px-3 py-1 border border-gray-300 rounded-md text-sm focus:ring-primary-500 focus:border-primary-500"
+                />
+              </div>
+              <div className="flex items-center gap-2">
+                <label htmlFor="endDate" className="text-sm text-gray-600">To:</label>
+                <input
+                  type="date"
+                  id="endDate"
+                  value={endDate}
+                  onChange={(e) => setEndDate(e.target.value)}
+                  className="px-3 py-1 border border-gray-300 rounded-md text-sm focus:ring-primary-500 focus:border-primary-500"
+                />
+              </div>
+              {startDate && endDate && (
+                <div className="text-sm text-gray-600 bg-white px-2 py-1 rounded border">
+                  {new Date(startDate).toLocaleDateString()} - {new Date(endDate).toLocaleDateString()}
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+
         <div className="flex gap-2">
           <button
             onClick={loadReportData}

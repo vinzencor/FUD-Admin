@@ -90,15 +90,15 @@ export interface UserAddressData {
   role: string;
   defaultMode: 'buyer' | 'seller' | 'both';
   mobile_phone?: string;
-  address?: string;
+  street_address?: string;
+  apartment_unit?: string;
   city?: string;
   state?: string;
+  district?: string;
   country?: string;
   zipcode?: string;
-  coordinates?: {
-    latitude: number;
-    longitude: number;
-  };
+  postal_code?: string;
+  coordinates?: any;
   seller_profile?: {
     store_name: string;
     description?: string;
@@ -110,6 +110,7 @@ export interface UserAddressData {
   is_seller: boolean;
   is_buyer: boolean;
   display_address: string;
+  full_address: string;
   location_complete: boolean;
 }
 
@@ -127,10 +128,17 @@ export interface SellerData {
   user_name?: string;
   user_email?: string;
   user_phone?: string;
+  user_street_address?: string;
+  user_apartment_unit?: string;
   user_city?: string;
   user_state?: string;
+  user_district?: string;
   user_country?: string;
+  user_zipcode?: string;
+  user_postal_code?: string;
+  user_coordinates?: any;
   user_created_at?: string;
+  user_full_address?: string;
 }
 
 export interface InterestData {
@@ -208,7 +216,7 @@ export async function fetchAllSellers(adminLocation?: AdminLocation | null): Pro
     // Build user query with location filter if provided
     let userQuery = supabase
       .from('users')
-      .select('id, full_name, email, mobile_phone, city, state, country, created_at')
+      .select('id, full_name, email, mobile_phone, street_address, apartment_unit, city, state, district, country, zip_code, postal_code, coordinates, created_at')
       .in('id', userIds);
 
     // Apply location filter for regional admins with zipcode-level granularity
@@ -250,15 +258,36 @@ export async function fetchAllSellers(adminLocation?: AdminLocation | null): Pro
     const result = sellerProfiles
       .map(seller => {
         const user = userMap.get(seller.user_id);
+
+        // Build full address string from all available fields
+        const addressParts = [
+          user?.street_address,
+          user?.apartment_unit,
+          user?.city,
+          user?.district,
+          user?.state,
+          user?.country,
+          user?.postal_code || user?.zip_code
+        ].filter(Boolean);
+
+        const fullAddress = addressParts.length > 0 ? addressParts.join(', ') : 'Address not provided';
+
         return {
           ...seller,
           user_name: user?.full_name,
           user_email: user?.email,
           user_phone: user?.mobile_phone,
+          user_street_address: user?.street_address,
+          user_apartment_unit: user?.apartment_unit,
           user_city: user?.city,
           user_state: user?.state,
+          user_district: user?.district,
           user_country: user?.country,
-          user_created_at: user?.created_at
+          user_zipcode: user?.zip_code,
+          user_postal_code: user?.postal_code,
+          user_coordinates: user?.coordinates,
+          user_created_at: user?.created_at,
+          user_full_address: fullAddress
         };
       })
       .filter(seller => {
@@ -316,14 +345,17 @@ export async function fetchAllInterests(): Promise<InterestData[]> {
 
 /**
  * Fetch farmer revenue data for reports - Real database data
- * Now supports location-based filtering for regional admins
+ * Now supports location-based filtering for regional admins and date range filtering
  */
-export async function fetchFarmerRevenueData(adminLocation?: AdminLocation | null): Promise<ReportData[]> {
+export async function fetchFarmerRevenueData(
+  adminLocation?: AdminLocation | null,
+  dateRange?: { startDate: string; endDate: string }
+): Promise<ReportData[]> {
   try {
     console.log('Fetching real farmer revenue data from database...');
 
     // Step 1: Get all interests with complete data
-    const { data: allInterests, error: interestsError } = await supabase
+    let interestsQuery = supabase
       .from('interests')
       .select(`
         id,
@@ -345,6 +377,15 @@ export async function fetchFarmerRevenueData(adminLocation?: AdminLocation | nul
           email
         )
       `);
+
+    // Add date range filtering if provided
+    if (dateRange) {
+      interestsQuery = interestsQuery
+        .gte('created_at', dateRange.startDate)
+        .lte('created_at', dateRange.endDate);
+    }
+
+    const { data: allInterests, error: interestsError } = await interestsQuery;
 
     if (interestsError) {
       console.error('Error fetching interests:', interestsError);
@@ -495,14 +536,17 @@ function processRealInterestsData(
 
 
 /**
- * Fetch location-based statistics with optional location filtering
+ * Fetch location-based statistics with optional location filtering and date range
  */
-export async function fetchLocationStats(adminLocation?: AdminLocation | null): Promise<{
+export async function fetchLocationStats(
+  adminLocation?: AdminLocation | null,
+  dateRange?: { startDate: string; endDate: string }
+): Promise<{
   byState: LocationStats[];
   byCountry: LocationStats[];
 }> {
   try {
-    const farmerData = await fetchFarmerRevenueData(adminLocation);
+    const farmerData = await fetchFarmerRevenueData(adminLocation, dateRange);
     
     // Group by state
     const stateStats = new Map<string, LocationStats>();
@@ -901,7 +945,7 @@ export async function fetchActivityLogs(): Promise<ActivityLogData[]> {
  */
 export async function fetchUsersWithAddresses(): Promise<UserAddressData[]> {
   try {
-    // First, get all users with their basic information
+    // First, get all users with their complete address information
     const { data: users, error: usersError } = await supabase
       .from('users')
       .select(`
@@ -911,9 +955,15 @@ export async function fetchUsersWithAddresses(): Promise<UserAddressData[]> {
         role,
         default_mode,
         mobile_phone,
+        street_address,
+        apartment_unit,
         city,
         state,
+        district,
         country,
+        zip_code,
+        postal_code,
+        coordinates,
         created_at
       `)
       .not('full_name', 'is', null)
@@ -959,7 +1009,6 @@ export async function fetchUsersWithAddresses(): Promise<UserAddressData[]> {
 
       // Determine the best address to use
       let displayAddress = '';
-      let coordinates = null;
 
       // Prefer seller profile address if available and more complete
       if (sellerProfile?.address && typeof sellerProfile.address === 'object') {
@@ -972,9 +1021,7 @@ export async function fetchUsersWithAddresses(): Promise<UserAddressData[]> {
           sellerAddr.zipcode
         ].filter(Boolean).join(', ');
 
-        if (sellerProfile.coordinates) {
-          coordinates = sellerProfile.coordinates;
-        }
+
       } else {
         // Use user's basic address information
         displayAddress = [
@@ -991,6 +1038,19 @@ export async function fetchUsersWithAddresses(): Promise<UserAddressData[]> {
         (user.country || sellerProfile?.address?.country)
       );
 
+      // Build full address string from all available fields
+      const addressParts = [
+        user.street_address,
+        user.apartment_unit,
+        user.city,
+        user.district,
+        user.state,
+        user.country,
+        user.postal_code || user.zip_code
+      ].filter(Boolean);
+
+      const fullAddress = addressParts.length > 0 ? addressParts.join(', ') : displayAddress || 'Address not provided';
+
       return {
         id: user.id,
         full_name: user.full_name,
@@ -998,12 +1058,15 @@ export async function fetchUsersWithAddresses(): Promise<UserAddressData[]> {
         role: user.role || 'user',
         defaultMode: user.default_mode || 'buyer',
         mobile_phone: user.mobile_phone,
-        address: undefined, // No address field in database
+        street_address: user.street_address,
+        apartment_unit: user.apartment_unit,
         city: user.city,
         state: user.state,
+        district: user.district,
         country: user.country,
-        zipcode: undefined, // No zipcode field in database
-        coordinates,
+        zipcode: user.zip_code,
+        postal_code: user.postal_code,
+        coordinates: user.coordinates,
         seller_profile: sellerProfile ? {
           store_name: sellerProfile.store_name,
           description: sellerProfile.description,
@@ -1015,6 +1078,7 @@ export async function fetchUsersWithAddresses(): Promise<UserAddressData[]> {
         is_seller: isSeller,
         is_buyer: isBuyer,
         display_address: displayAddress || 'Address not provided',
+        full_address: fullAddress,
         location_complete: locationComplete
       };
     });
