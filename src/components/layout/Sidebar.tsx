@@ -41,8 +41,8 @@ export function Sidebar() {
     { name: 'Sellers', to: `${basePath}/farmers`, icon: Store },
     { name: 'Featured Sellers', to: `${basePath}/featured-sellers`, icon: Crown },
     // { name: 'PMA Members', to: `${basePath}/pma-members`, icon: Crown },
-    { name: 'Orders', to: `${basePath}/orders`, icon: ShoppingBasket },
-    { name: 'Interests', to: `${basePath}/interests`, icon: Heart },
+    // { name: 'Orders', to: `${basePath}/orders`, icon: ShoppingBasket },
+    { name: 'Orders', to: `${basePath}/interests`, icon: Heart },
     { name: 'Feedback', to: `${basePath}/feedback`, icon: MessageSquare },
     { name: 'Reports', to: `${basePath}/reports`, icon: FileText },
     // Super admin only navigation

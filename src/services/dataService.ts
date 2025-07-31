@@ -121,10 +121,11 @@ export interface SellerData {
   features?: string[];
   profile_image?: string;
   cover_image?: string;
-  address?: any;
+  address?: any; // Legacy field - may contain JSON
   coordinates?: any;
   working_hours?: any;
   is_approved?: boolean;
+  // User personal address fields
   user_name?: string;
   user_email?: string;
   user_phone?: string;
@@ -199,10 +200,21 @@ export async function fetchAllUsers(): Promise<UserData[]> {
  */
 export async function fetchAllSellers(adminLocation?: AdminLocation | null): Promise<SellerData[]> {
   try {
-    // First get seller profiles
+    // First get seller profiles - using only existing columns
     const { data: sellerProfiles, error: sellerError } = await supabase
       .from('seller_profiles')
-      .select('*');
+      .select(`
+        user_id,
+        store_name,
+        description,
+        features,
+        profile_image,
+        cover_image,
+        address,
+        coordinates,
+        working_hours,
+        is_approved
+      `);
 
     if (sellerError) throw sellerError;
 

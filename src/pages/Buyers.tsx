@@ -23,12 +23,23 @@ interface Buyer {
   lastActive: string;
   fullAddress?: string;
   coordinates?: any;
-  // Individual address fields
+  // Individual address fields (personal)
+  street_address?: string;
+  apartment_unit?: string;
   city?: string;
   state?: string;
   district?: string;
   country?: string;
   zipcode?: string;
+  // Business address fields (if user is also a seller)
+  business_street_address?: string;
+  business_apartment_unit?: string;
+  business_city?: string;
+  business_state?: string;
+  business_district?: string;
+  business_country?: string;
+  business_zipcode?: string;
+  has_business_address?: boolean;
 }
 
 export function Buyers() {
@@ -93,24 +104,105 @@ export function Buyers() {
           // If is_seller is true but defaultMode is 'buyer' or 'both', include them
           return !userData.is_seller || userData.defaultMode === 'buyer' || userData.defaultMode === 'both';
         })
-        .map(userData => ({
-          id: userData.id,
-          name: userData.full_name || 'Unknown User',
-          email: userData.email || '',
-          phone: userData.mobile_phone || '',
-          location: `${userData.city || ''}, ${userData.state || ''}, ${userData.country || ''}`.replace(/^,\s*|,\s*$/g, '').replace(/,\s*,/g, ','),
-          defaultMode: userData.defaultMode || 'buyer',
-          registrationDate: userData.created_at || '',
-          lastActive: userData.created_at || '', // UserAddressData doesn't have last_sign_in_at
-          fullAddress: userData.full_address,
-          coordinates: userData.coordinates,
-          // Individual address fields
-          city: userData.city,
-          state: userData.state,
-          district: userData.district,
-          country: userData.country,
-          zipcode: userData.zipcode
-        }));
+        .map(userData => {
+          // Parse business address from seller profile JSON address field
+          let businessAddress: any = null;
+          let hasBusinessAddress = false;
+
+          if (userData.seller_profile?.address) {
+            try {
+              businessAddress = typeof userData.seller_profile.address === 'string'
+                ? JSON.parse(userData.seller_profile.address)
+                : userData.seller_profile.address;
+              hasBusinessAddress = !!(businessAddress && (
+                businessAddress.street ||
+                businessAddress.street_address ||
+                businessAddress.city ||
+                businessAddress.state ||
+                businessAddress.country
+              ));
+            } catch (error) {
+              console.warn('Failed to parse business address:', error);
+              hasBusinessAddress = false;
+            }
+          }
+
+          // Build complete personal address from all available fields
+          const personalAddressParts = [
+            userData.street_address,
+            userData.apartment_unit,
+            userData.city,
+            userData.district,
+            userData.state,
+            userData.country,
+            userData.zipcode || userData.postal_code
+          ].filter(Boolean);
+
+          // Build complete business address if available
+          const businessAddressParts = hasBusinessAddress && businessAddress ? [
+            businessAddress.street || businessAddress.street_address,
+            businessAddress.apartment_unit || businessAddress.unit,
+            businessAddress.city,
+            businessAddress.district,
+            businessAddress.state,
+            businessAddress.country,
+            businessAddress.zipcode || businessAddress.postal_code
+          ].filter(Boolean) : [];
+
+          // Use business address if available and more complete, otherwise personal address
+          const primaryAddressParts = businessAddressParts.length > personalAddressParts.length
+            ? businessAddressParts
+            : personalAddressParts;
+
+          const completeAddress = primaryAddressParts.length > 0
+            ? primaryAddressParts.join(', ')
+            : userData.full_address || userData.display_address || 'Address not provided';
+
+          // Create a shorter location display for table (prefer business location for sellers)
+          const locationParts = hasBusinessAddress && businessAddress ? [
+            businessAddress.city || userData.city,
+            businessAddress.state || userData.state,
+            businessAddress.country || userData.country
+          ].filter(Boolean) : [
+            userData.city,
+            userData.state,
+            userData.country
+          ].filter(Boolean);
+
+          const locationDisplay = locationParts.length > 0
+            ? locationParts.join(', ')
+            : 'Location not provided';
+
+          return {
+            id: userData.id,
+            name: userData.full_name || 'Unknown User',
+            email: userData.email || '',
+            phone: userData.mobile_phone || '',
+            location: locationDisplay,
+            defaultMode: userData.defaultMode || 'buyer',
+            registrationDate: userData.created_at || '',
+            lastActive: userData.created_at || '', // UserAddressData doesn't have last_sign_in_at
+            fullAddress: completeAddress,
+            coordinates: userData.coordinates,
+            // Individual personal address fields
+            street_address: userData.street_address,
+            apartment_unit: userData.apartment_unit,
+            city: userData.city,
+            state: userData.state,
+            district: userData.district,
+            country: userData.country,
+            zipcode: userData.zipcode || userData.postal_code,
+            // Business address fields (parsed from JSON)
+            business_street_address: businessAddress?.street || businessAddress?.street_address,
+            business_apartment_unit: businessAddress?.apartment_unit || businessAddress?.unit,
+            business_city: businessAddress?.city,
+            business_state: businessAddress?.state,
+            business_district: businessAddress?.district,
+            business_country: businessAddress?.country,
+            business_zipcode: businessAddress?.zipcode || businessAddress?.postal_code,
+            has_business_address: hasBusinessAddress
+          };
+        });
 
       setBuyers(buyersData);
     } catch (err) {
@@ -384,7 +476,16 @@ export function Buyers() {
                       </td>
                       <td className="px-6 py-4">
                         <div className="text-sm text-gray-900">
-                          {buyer.fullAddress || buyer.location}
+                          <div className="max-w-xs">
+                            <div className="font-medium truncate" title={buyer.fullAddress}>
+                              {buyer.fullAddress}
+                            </div>
+                            {buyer.fullAddress !== buyer.location && (
+                              <div className="text-xs text-gray-500 truncate" title={buyer.location}>
+                                {buyer.location}
+                              </div>
+                            )}
+                          </div>
                         </div>
                       </td>
                       <td className="px-6 py-4">
@@ -426,11 +527,35 @@ export function Buyers() {
           phone: selectedBuyer.phone,
           defaultMode: selectedBuyer.defaultMode,
           address: selectedBuyer.fullAddress,
+          // Personal address fields
+          street_address: selectedBuyer.street_address,
+          apartment_unit: selectedBuyer.apartment_unit,
           city: selectedBuyer.city,
           state: selectedBuyer.state,
           district: selectedBuyer.district,
           country: selectedBuyer.country,
           zipcode: selectedBuyer.zipcode,
+          // Business address fields (if available)
+          has_business_address: selectedBuyer.has_business_address,
+          business_address: selectedBuyer.has_business_address ? (() => {
+            const parts = [
+              selectedBuyer.business_street_address,
+              selectedBuyer.business_apartment_unit,
+              selectedBuyer.business_city,
+              selectedBuyer.business_district,
+              selectedBuyer.business_state,
+              selectedBuyer.business_country,
+              selectedBuyer.business_zipcode
+            ].filter(Boolean);
+            return parts.length > 0 ? parts.join(', ') : undefined;
+          })() : undefined,
+          business_street_address: selectedBuyer.business_street_address,
+          business_apartment_unit: selectedBuyer.business_apartment_unit,
+          business_city: selectedBuyer.business_city,
+          business_state: selectedBuyer.business_state,
+          business_district: selectedBuyer.business_district,
+          business_country: selectedBuyer.business_country,
+          business_zipcode: selectedBuyer.business_zipcode,
           coordinates: selectedBuyer.coordinates,
           registrationDate: selectedBuyer.registrationDate,
           lastActive: selectedBuyer.lastActive
