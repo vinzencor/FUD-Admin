@@ -13,7 +13,8 @@ import {
   CheckCircle,
   Users,
   Calendar,
-  Activity
+  Activity,
+  UserPlus
 } from 'lucide-react';
 import { Button } from '../../components/ui/button';
 import { Badge } from '../../components/ui/badge';
@@ -419,7 +420,7 @@ export function AdminManagement() {
               }`}
             >
               <div className="flex items-center gap-2">
-                <Crown className="h-4 w-4" />
+                <UserPlus className="h-5 w-5 " />
                 Assign New Regional Admin
               </div>
             </button>
