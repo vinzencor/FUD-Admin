@@ -53,7 +53,7 @@ export function HeroSection({
     loadCoverImage(); // Reload the cover image
   };
 
-  const defaultImageUrl = 'https://images.unsplash.com/photo-1500937386664-56d1dfef3854?auto=format&fit=crop&q=80';
+  const defaultImageUrl = 'YOUR_FIREBASE_IMAGE_URL_HERE';
   const backgroundImageUrl = coverImage?.image_url || defaultImageUrl;
 
   if (isLoading) {
