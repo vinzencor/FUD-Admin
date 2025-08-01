@@ -112,6 +112,16 @@ export interface UserAddressData {
   display_address: string;
   full_address: string;
   location_complete: boolean;
+  default_address?: {
+    id: string;
+    label: string;
+    street?: string;
+    city: string;
+    state: string;
+    zip_code: string;
+    country: string;
+    coordinates?: any;
+  };
 }
 
 export interface SellerData {
@@ -954,10 +964,11 @@ export async function fetchActivityLogs(): Promise<ActivityLogData[]> {
 /**
  * Fetch all users with complete address information for admin assignment
  * This includes both buyers and sellers with their location data
+ * For buyers, it fetches their default address from the user_addresses table
  */
 export async function fetchUsersWithAddresses(): Promise<UserAddressData[]> {
   try {
-    // First, get all users with their complete address information
+    // First, get all users with their basic information
     const { data: users, error: usersError } = await supabase
       .from('users')
       .select(`
@@ -987,6 +998,26 @@ export async function fetchUsersWithAddresses(): Promise<UserAddressData[]> {
       throw usersError;
     }
 
+    // Fetch default addresses from user_addresses table
+    const { data: defaultAddresses, error: addressError } = await supabase
+      .from('user_addresses')
+      .select(`
+        user_id,
+        label,
+        street,
+        city,
+        state,
+        zip_code,
+        country,
+        coordinates
+      `)
+      .eq('is_default', true);
+
+    if (addressError) {
+      console.error('Error fetching default addresses:', addressError);
+      // Don't throw error, just log it and continue without default addresses
+    }
+
     if (!users || users.length === 0) {
       return [];
     }
@@ -1007,23 +1038,61 @@ export async function fetchUsersWithAddresses(): Promise<UserAddressData[]> {
       console.error('Error fetching seller profiles:', sellerError);
     }
 
-    // Create a map of seller profiles for quick lookup
+    // Create maps for quick lookup
     const sellerProfileMap = new Map();
     sellerProfiles?.forEach(profile => {
       sellerProfileMap.set(profile.user_id, profile);
     });
 
+    const defaultAddressMap = new Map();
+    defaultAddresses?.forEach(address => {
+      defaultAddressMap.set(address.user_id, address);
+    });
+
     // Process and enrich user data
     const enrichedUsers: UserAddressData[] = users.map(user => {
       const sellerProfile = sellerProfileMap.get(user.id);
+      const defaultAddress = defaultAddressMap.get(user.id);
       const isSeller = !!sellerProfile || user.default_mode === 'seller' || user.default_mode === 'both';
       const isBuyer = user.default_mode === 'buyer' || user.default_mode === 'both';
 
       // Determine the best address to use
       let displayAddress = '';
+      let addressData = {
+        street_address: user.street_address,
+        apartment_unit: user.apartment_unit,
+        city: user.city,
+        state: user.state,
+        district: user.district,
+        country: user.country,
+        zipcode: user.zip_code || user.postal_code,
+        coordinates: user.coordinates
+      };
 
-      // Prefer seller profile address if available and more complete
-      if (sellerProfile?.address && typeof sellerProfile.address === 'object') {
+      // For buyers, prefer their chosen default address from user_addresses table
+      if (isBuyer && defaultAddress) {
+        displayAddress = [
+          defaultAddress.street,
+          defaultAddress.city,
+          defaultAddress.state,
+          defaultAddress.country,
+          defaultAddress.zip_code
+        ].filter(Boolean).join(', ');
+
+        // Update address data with default address info
+        addressData = {
+          street_address: defaultAddress.street,
+          apartment_unit: null, // user_addresses table doesn't have apartment_unit
+          city: defaultAddress.city,
+          state: defaultAddress.state,
+          district: null, // user_addresses table doesn't have district
+          country: defaultAddress.country,
+          zipcode: defaultAddress.zip_code,
+          coordinates: defaultAddress.coordinates
+        };
+      }
+      // For sellers, prefer seller profile address if available and more complete
+      else if (sellerProfile?.address && typeof sellerProfile.address === 'object') {
         const sellerAddr = sellerProfile.address;
         displayAddress = [
           sellerAddr.street,
@@ -1033,32 +1102,44 @@ export async function fetchUsersWithAddresses(): Promise<UserAddressData[]> {
           sellerAddr.zipcode
         ].filter(Boolean).join(', ');
 
-
+        // Update address data with seller profile info
+        addressData = {
+          street_address: sellerAddr.street,
+          apartment_unit: sellerAddr.apartment_unit,
+          city: sellerAddr.city || user.city,
+          state: sellerAddr.state || user.state,
+          district: sellerAddr.district,
+          country: sellerAddr.country || user.country,
+          zipcode: sellerAddr.zipcode,
+          coordinates: sellerProfile.coordinates || user.coordinates
+        };
       } else {
-        // Use user's basic address information
+        // Fallback to user's basic address information
         displayAddress = [
+          user.street_address,
           user.city,
           user.state,
-          user.country
+          user.country,
+          user.zip_code || user.postal_code
         ].filter(Boolean).join(', ');
       }
 
       // Check if location information is complete enough for mapping
       const locationComplete = !!(
-        (user.city || sellerProfile?.address?.city) &&
-        (user.state || sellerProfile?.address?.state) &&
-        (user.country || sellerProfile?.address?.country)
+        addressData.city &&
+        addressData.state &&
+        addressData.country
       );
 
       // Build full address string from all available fields
       const addressParts = [
-        user.street_address,
-        user.apartment_unit,
-        user.city,
-        user.district,
-        user.state,
-        user.country,
-        user.postal_code || user.zip_code
+        addressData.street_address,
+        addressData.apartment_unit,
+        addressData.city,
+        addressData.district,
+        addressData.state,
+        addressData.country,
+        addressData.zipcode
       ].filter(Boolean);
 
       const fullAddress = addressParts.length > 0 ? addressParts.join(', ') : displayAddress || 'Address not provided';
@@ -1070,15 +1151,15 @@ export async function fetchUsersWithAddresses(): Promise<UserAddressData[]> {
         role: user.role || 'user',
         defaultMode: user.default_mode || 'buyer',
         mobile_phone: user.mobile_phone,
-        street_address: user.street_address,
-        apartment_unit: user.apartment_unit,
-        city: user.city,
-        state: user.state,
-        district: user.district,
-        country: user.country,
-        zipcode: user.zip_code,
-        postal_code: user.postal_code,
-        coordinates: user.coordinates,
+        street_address: addressData.street_address,
+        apartment_unit: addressData.apartment_unit,
+        city: addressData.city,
+        state: addressData.state,
+        district: addressData.district,
+        country: addressData.country,
+        zipcode: addressData.zipcode,
+        postal_code: addressData.zipcode, // Use zipcode for postal_code as well
+        coordinates: addressData.coordinates,
         seller_profile: sellerProfile ? {
           store_name: sellerProfile.store_name,
           description: sellerProfile.description,
@@ -1091,13 +1172,60 @@ export async function fetchUsersWithAddresses(): Promise<UserAddressData[]> {
         is_buyer: isBuyer,
         display_address: displayAddress || 'Address not provided',
         full_address: fullAddress,
-        location_complete: locationComplete
+        location_complete: locationComplete,
+        // Add default address info for buyers
+        default_address: defaultAddress ? {
+          id: defaultAddress.id,
+          label: defaultAddress.label,
+          street: defaultAddress.street,
+          city: defaultAddress.city,
+          state: defaultAddress.state,
+          zip_code: defaultAddress.zip_code,
+          country: defaultAddress.country,
+          coordinates: defaultAddress.coordinates
+        } : undefined
       };
     });
 
     return enrichedUsers;
   } catch (error) {
     console.error('Error fetching users with addresses:', error);
+    throw error;
+  }
+}
+
+/**
+ * Fetch all addresses for a specific user
+ */
+export async function fetchUserAddresses(userId: string) {
+  try {
+    const { data: addresses, error } = await supabase
+      .from('user_addresses')
+      .select(`
+        id,
+        label,
+        street,
+        city,
+        state,
+        zip_code,
+        country,
+        coordinates,
+        is_default,
+        created_at,
+        updated_at
+      `)
+      .eq('user_id', userId)
+      .order('is_default', { ascending: false })
+      .order('created_at', { ascending: false });
+
+    if (error) {
+      console.error('Error fetching user addresses:', error);
+      throw error;
+    }
+
+    return addresses || [];
+  } catch (error) {
+    console.error('Error fetching user addresses:', error);
     throw error;
   }
 }

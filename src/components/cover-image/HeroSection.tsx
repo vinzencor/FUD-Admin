@@ -11,14 +11,16 @@ interface HeroSectionProps {
   showEditButton?: boolean;
   className?: string;
   children?: React.ReactNode;
+  imageFit?: 'cover' | 'fill' | 'contain';
 }
 
-export function HeroSection({ 
-  title = "Welcome to Our Platform", 
+export function HeroSection({
+  title = "Welcome to Our Platform",
   subtitle = "Discover amazing features and capabilities",
   showEditButton = true,
   className = "",
-  children 
+  children,
+  imageFit = 'cover'
 }: HeroSectionProps) {
   const user = useAuthStore((state) => state.user);
   const [coverImage, setCoverImage] = useState<CoverImage | null>(null);
@@ -68,11 +70,43 @@ export function HeroSection({
   return (
     <>
       <div
-        className={`relative h-[350px] md:h-[450px] bg-cover bg-center ${className}`}
+        className={`relative h-[350px] md:h-[450px] overflow-hidden w-full ${className}`}
         style={{
-          backgroundImage: `url("${backgroundImageUrl}")`,
+          // Ensure full width even if parent has constraints
+          width: '100%',
+          maxWidth: 'none',
+          marginLeft: 0,
+          marginRight: 0
         }}
       >
+        {/* Full-width background image - configurable fit */}
+        <div
+          className="absolute inset-0 w-full h-full"
+          style={{
+            backgroundImage: `url("${backgroundImageUrl}")`,
+            backgroundSize: imageFit === 'fill' ? '100% 100%' : imageFit,
+            backgroundPosition: 'center center',
+            backgroundRepeat: 'no-repeat',
+            backgroundAttachment: 'scroll'
+          }}
+        />
+
+        {/* Fallback img element for better browser support */}
+        <img
+          src={backgroundImageUrl}
+          alt="Cover"
+          className="absolute inset-0 w-full h-full opacity-0"
+          style={{
+            objectFit: imageFit,
+            objectPosition: 'center center'
+          }}
+          onError={(e) => {
+            // If img fails, ensure background div is visible
+            const target = e.target as HTMLImageElement;
+            target.style.display = 'none';
+          }}
+        />
+
         {/* Overlay for better text readability */}
         <div className="absolute inset-0 bg-black bg-opacity-40" />
         

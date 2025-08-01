@@ -9,6 +9,10 @@ import { Interests } from './pages/Interests';
 import { Feedback } from './pages/Feedback';
 import { Farmers } from './pages/Farmers';
 import { Buyers } from './pages/Buyers';
+import { BuyerAddressTest } from './pages/BuyerAddressTest';
+import { DatabaseViewer } from './pages/DatabaseViewer';
+import { DatabaseStructure } from './pages/DatabaseStructure';
+import { ProductsTest } from './pages/ProductsTest';
 import { FeaturedSellers } from './pages/FeaturedSellers';
 import { Reports } from './pages/super-admin/Reports';
 
@@ -51,6 +55,10 @@ function App() {
         <Route path="/login" element={<Login />} />
         <Route path="/setup-super-admin" element={<SuperAdminSetup />} />
         <Route path="/debug-data-service" element={<DebugDataService />} />
+        <Route path="/buyer-address-test" element={<BuyerAddressTest />} />
+        <Route path="/database-viewer" element={<DatabaseViewer />} />
+        <Route path="/database-structure" element={<DatabaseStructure />} />
+        <Route path="/products-test" element={<ProductsTest />} />
 
         <Route
           path="/"
