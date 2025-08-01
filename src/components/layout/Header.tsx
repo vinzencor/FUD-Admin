@@ -30,7 +30,6 @@ export function Header() {
     <header className="bg-white shadow">
       <div className="flex h-16 items-center justify-between px-4">
         <div className="flex items-center">
-          <h2 className="text-2xl font-semibold text-gray-800">Dashboard</h2>
         </div>
         <div className="flex items-center space-x-4">
           <button className="text-gray-500 hover:text-gray-700">

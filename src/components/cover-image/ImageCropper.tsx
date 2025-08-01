@@ -30,7 +30,7 @@ function centerAspectCrop(
   )
 }
 
-export function ImageCropper({ src, onCropComplete, onCancel, aspectRatio = 16 / 9 }: ImageCropperProps) {
+export function ImageCropper({ src, onCropComplete, onCancel, aspectRatio }: ImageCropperProps) {
   const [crop, setCrop] = useState<Crop>();
   const [completedCrop, setCompletedCrop] = useState<PixelCrop>();
   const [scale, setScale] = useState(1);
@@ -40,11 +40,42 @@ export function ImageCropper({ src, onCropComplete, onCancel, aspectRatio = 16 /
   const [processing, setProcessing] = useState(false);
 
   const onImageLoad = useCallback((e: React.SyntheticEvent<HTMLImageElement>) => {
+    const { width, height } = e.currentTarget;
+
     if (aspectRatio) {
-      const { width, height } = e.currentTarget;
+      // Use aspect ratio if provided
       setCrop(centerAspectCrop(width, height, aspectRatio));
+    } else {
+      // For free cropping, start with full width and let user adjust height
+      setCrop({
+        unit: '%',
+        x: 0,
+        y: 10, // Start 10% from top
+        width: 100, // Full width
+        height: 80, // 80% height, user can adjust
+      });
     }
   }, [aspectRatio]);
+
+  const setFullWidth = useCallback(() => {
+    setCrop({
+      unit: '%',
+      x: 0,
+      y: 0,
+      width: 100,
+      height: 100,
+    });
+  }, []);
+
+  const setFullWidthBanner = useCallback(() => {
+    setCrop({
+      unit: '%',
+      x: 0,
+      y: 25, // Start 25% from top for banner-style
+      width: 100,
+      height: 50, // 50% height for banner
+    });
+  }, []);
 
   const getCroppedImg = useCallback(async () => {
     if (!completedCrop || !imgRef.current || !previewCanvasRef.current) {
@@ -118,7 +149,10 @@ export function ImageCropper({ src, onCropComplete, onCancel, aspectRatio = 16 /
       <div className="text-center">
         <h3 className="text-lg font-medium text-gray-900 mb-2">Crop Your Image</h3>
         <p className="text-sm text-gray-600">
-          Adjust the crop area to fit your hero section. The recommended aspect ratio is 16:9.
+          {aspectRatio
+            ? `Adjust the crop area to fit your hero section. The aspect ratio is ${aspectRatio.toFixed(2)}:1.`
+            : 'Adjust the crop area to your desired size. You can crop to any dimensions for full-width display.'
+          }
         </p>
       </div>
 
@@ -145,6 +179,35 @@ export function ImageCropper({ src, onCropComplete, onCancel, aspectRatio = 16 /
 
       {/* Controls */}
       <div className="space-y-4 bg-gray-50 p-4 rounded-lg">
+        {/* Quick Presets (only show when no aspect ratio is enforced) */}
+        {!aspectRatio && (
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Quick Presets
+            </label>
+            <div className="flex gap-2 flex-wrap">
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={setFullWidth}
+                className="text-xs"
+              >
+                Full Image
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={setFullWidthBanner}
+                className="text-xs"
+              >
+                Banner Style
+              </Button>
+            </div>
+          </div>
+        )}
+
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-2">
             Scale: {scale.toFixed(2)}

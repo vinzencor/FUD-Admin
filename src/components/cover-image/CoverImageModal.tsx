@@ -121,7 +121,7 @@ export function CoverImageModal({ isOpen, onClose, onImageUpdated }: CoverImageM
         <ImageIcon className="mx-auto h-12 w-12 text-gray-400" />
         <h3 className="mt-2 text-lg font-medium text-gray-900">Upload Cover Image</h3>
         <p className="mt-1 text-sm text-gray-500">
-          Choose a high-quality image for your hero section
+          Choose a high-quality image that will be displayed at full width
         </p>
       </div>
 
@@ -134,6 +134,7 @@ export function CoverImageModal({ isOpen, onClose, onImageUpdated }: CoverImageM
           <span className="font-medium text-primary-600">Click to upload</span> or drag and drop
         </p>
         <p className="text-xs text-gray-500">PNG, JPG, WebP up to 5MB</p>
+        <p className="text-xs text-blue-600 mt-1">You can crop to any size - perfect for full-width display</p>
       </div>
 
       <input
@@ -158,7 +159,7 @@ export function CoverImageModal({ isOpen, onClose, onImageUpdated }: CoverImageM
       src={imagePreviewUrl}
       onCropComplete={handleCropComplete}
       onCancel={() => setCurrentStep('upload')}
-      aspectRatio={16 / 9}
+      aspectRatio={undefined} // Allow free cropping for full-width images
     />
   );
 
@@ -193,12 +194,13 @@ export function CoverImageModal({ isOpen, onClose, onImageUpdated }: CoverImageM
             <img
               src={croppedImageUrl}
               alt="Cropped preview"
-              className="w-full h-48 object-cover"
+              className="w-full object-cover"
+              style={{ maxHeight: '300px' }}
             />
             <div className="absolute inset-0 bg-black bg-opacity-40 flex items-center justify-center">
               <div className="text-white text-center">
-                <h4 className="text-xl font-semibold">Hero Section Preview</h4>
-                <p className="text-sm opacity-90">This is how your image will appear</p>
+                <h4 className="text-xl font-semibold">Cover Image Preview</h4>
+                <p className="text-sm opacity-90">This image will be displayed at full width</p>
               </div>
             </div>
           </div>

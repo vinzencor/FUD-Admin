@@ -599,8 +599,6 @@ export function Farmers() {
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Name</th>
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Contact</th>
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Address</th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Products</th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Actions</th>
             </tr>
           </thead>
           <tbody className="bg-white divide-y divide-gray-200">
@@ -621,53 +619,6 @@ export function Farmers() {
                   {/* Show full address */}
                   <div className="max-w-xs truncate" title={farmer.location}>
                     {farmer.location}
-                  </div>
-                </td>
-                <td className="px-6 py-4">
-                  <div className="flex flex-wrap gap-1">
-                    {farmer.products.map((product, idx) => (
-                      <span
-                        key={idx}
-                        className="px-2 py-1 text-xs bg-gray-100 rounded-full"
-                      >
-                        {product}
-                      </span>
-                    ))}
-                  </div>
-                </td>
-                {/* <td className="px-6 py-4 whitespace-nowrap">
-                  <div className="flex items-center">
-                    {getStatusIcon(farmer.status)}
-                    <span className={`ml-2 px-2 py-1 text-xs rounded-full ${getStatusBadgeColor(farmer.status)}`}>
-                      {farmer.status.charAt(0).toUpperCase() + farmer.status.slice(1)}
-                    </span>
-                  </div>
-                </td> */}
-                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                  <div className="flex space-x-2">
-                    {/* Only show Remove Featured button for featured sellers */}
-                    {featuredSellers.has(farmer.id) && (
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation(); // Prevent row click
-                          toggleFeaturedStatus(farmer.id, farmer.name);
-                        }}
-                        disabled={processingFeatured === farmer.id}
-                        className="px-2 py-1 rounded text-sm flex items-center gap-1 text-yellow-600 hover:text-yellow-700"
-                      >
-                        <Star className="h-3 w-3 fill-current" />
-                        {processingFeatured === farmer.id ? 'Processing...' : 'Remove Featured'}
-                      </button>
-                    )}
-                    {/* <select
-                      value={farmer.status}
-                      onChange={(e) => handleStatusChange(farmer.id, e.target.value as Farmer['status'])}
-                      className="text-sm border border-gray-300 rounded px-2"
-                    >
-                      <option value="pending">Pending</option>
-                      <option value="approved">Approve</option>
-                      <option value="suspended">Suspend</option>
-                    </select> */}
                   </div>
                 </td>
               </tr>

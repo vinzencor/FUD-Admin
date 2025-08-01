@@ -40,6 +40,17 @@ interface Buyer {
   business_country?: string;
   business_zipcode?: string;
   has_business_address?: boolean;
+  // Default address from user_addresses table
+  default_address?: {
+    id: string;
+    label: string;
+    street?: string;
+    city: string;
+    state: string;
+    zip_code: string;
+    country: string;
+    coordinates?: any;
+  };
 }
 
 export function Buyers() {
@@ -127,6 +138,7 @@ export function Buyers() {
             }
           }
 
+          
           // Build complete personal address from all available fields
           const personalAddressParts = [
             userData.street_address,
@@ -200,7 +212,9 @@ export function Buyers() {
             business_district: businessAddress?.district,
             business_country: businessAddress?.country,
             business_zipcode: businessAddress?.zipcode || businessAddress?.postal_code,
-            has_business_address: hasBusinessAddress
+            has_business_address: hasBusinessAddress,
+            // Default address from user_addresses table
+            default_address: userData.default_address
           };
         });
 
@@ -414,9 +428,23 @@ export function Buyers() {
                         <Phone className="h-3 w-3 mr-2" />
                         {buyer.phone || 'No phone'}
                       </div>
-                      <div className="flex items-center text-gray-600">
-                        <MapPin className="h-3 w-3 mr-2" />
-                        {buyer.fullAddress || buyer.location}
+                      <div className="flex items-start text-gray-600">
+                        <MapPin className="h-3 w-3 mr-2 mt-0.5" />
+                        <div className="flex-1">
+                          <div className="flex items-center gap-2">
+                            <span>{buyer.fullAddress || buyer.location}</span>
+                            {buyer.default_address && (
+                              <span className="inline-flex px-1.5 py-0.5 text-xs font-medium bg-green-100 text-green-800 rounded">
+                                Default
+                              </span>
+                            )}
+                          </div>
+                          {buyer.default_address && buyer.default_address.label && (
+                            <div className="text-xs text-blue-600 font-medium mt-1">
+                              📍 {buyer.default_address.label}
+                            </div>
+                          )}
+                        </div>
                       </div>
                       <div className="flex items-center text-gray-600">
                         <Calendar className="h-3 w-3 mr-2" />
@@ -477,9 +505,21 @@ export function Buyers() {
                       <td className="px-6 py-4">
                         <div className="text-sm text-gray-900">
                           <div className="max-w-xs">
-                            <div className="font-medium truncate" title={buyer.fullAddress}>
-                              {buyer.fullAddress}
+                            <div className="flex items-center gap-2 mb-1">
+                              <div className="font-medium truncate" title={buyer.fullAddress}>
+                                {buyer.fullAddress}
+                              </div>
+                              {buyer.default_address && (
+                                <span className="inline-flex px-1.5 py-0.5 text-xs font-medium bg-green-100 text-green-800 rounded">
+                                  Default
+                                </span>
+                              )}
                             </div>
+                            {buyer.default_address && buyer.default_address.label && (
+                              <div className="text-xs text-blue-600 font-medium">
+                                📍 {buyer.default_address.label}
+                              </div>
+                            )}
                             {buyer.fullAddress !== buyer.location && (
                               <div className="text-xs text-gray-500 truncate" title={buyer.location}>
                                 {buyer.location}

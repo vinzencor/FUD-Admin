@@ -563,7 +563,7 @@ export function Orders() {
       ) : (
         <>
           {/* Legend */}
-          <div className="bg-gray-50 border border-gray-200 rounded-lg p-4 mb-4">
+          {/* <div className="bg-gray-50 border border-gray-200 rounded-lg p-4 mb-4">
             <h3 className="text-sm font-medium text-gray-900 mb-2">Legend</h3>
             <div className="flex flex-wrap gap-4 text-xs">
               <div className="flex items-center space-x-2">
@@ -575,7 +575,7 @@ export function Orders() {
                 <span className="text-gray-600">Order inquiries from the interests table</span>
               </div>
             </div>
-          </div>
+          </div> */}
 
           {/* Responsive table wrapper with horizontal scroll */}
           <div className="overflow-x-auto">
