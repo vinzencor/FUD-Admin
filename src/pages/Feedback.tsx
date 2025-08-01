@@ -171,7 +171,7 @@ export function Feedback() {
             message: item.message,
             status: item.status || 'new',
             date: new Date(item.created_at).toLocaleDateString(),
-            region: item.region,
+            // region: item.region,
             response: item.response,
             responseDate: item.response_date,
             user_id: item.user_id,
@@ -379,15 +379,15 @@ export function Feedback() {
       { key: 'userName', label: 'User Name' },
       { key: 'subject', label: 'Subject' },
       { key: 'message', label: 'Message' },
-      { key: 'status', label: 'Status' },
+      // { key: 'status', label: 'Status' },
       { key: 'date', label: 'Date' },
-      { key: 'region', label: 'Region' },
+      // { key: 'region', label: 'Region' },
       { key: 'rating', label: 'Rating' },
       { key: 'reviewType', label: 'Review Type' },
       { key: 'productName', label: 'Product' },
       { key: 'sellerName', label: 'Seller' },
-      { key: 'response', label: 'Response' },
-      { key: 'responseDate', label: 'Response Date' }
+      // { key: 'response', label: 'Response' },
+      // { key: 'responseDate', label: 'Response Date' }
     ];
 
     await exportWithLoading(
@@ -714,9 +714,7 @@ export function Feedback() {
                   {feedback.sellerName && (
                     <p className="text-sm text-gray-500">Seller: {feedback.sellerName}</p>
                   )}
-                  {user?.role === 'super_admin' && (
-                    <p className="text-sm text-gray-500">Region: {feedback.region}</p>
-                  )}
+                 
                 </div>
               </div>
               {/* <select

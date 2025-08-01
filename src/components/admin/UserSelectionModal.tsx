@@ -173,14 +173,14 @@ export function UserSelectionModal({
               </div>
               <p className="text-sm text-gray-600 mt-1">{description}</p>
             </div>
-            <Button
+            {/* <Button
               variant="ghost"
               size="sm"
               onClick={handleClose}
               className="h-8 w-8 p-0"
             >
               <X className="h-4 w-4" />
-            </Button>
+            </Button> */}
           </div>
         </DialogHeader>
 
@@ -210,7 +210,7 @@ export function UserSelectionModal({
                 <List className="h-4 w-4" />
                 List
               </Button>
-              <Button
+              {/* <Button
                 variant={viewMode === 'map' ? 'default' : 'outline'}
                 size="sm"
                 onClick={() => setViewMode('map')}
@@ -218,7 +218,7 @@ export function UserSelectionModal({
               >
                 <Map className="h-4 w-4" />
                 Map
-              </Button>
+              </Button> */}
               <Button
                 variant="outline"
                 size="sm"

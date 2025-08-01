@@ -253,53 +253,7 @@ export function EnhancedAdminAssignment({
       </div>
 
       {/* Features Overview */}
-      <div className="bg-white rounded-lg border border-gray-200 p-6">
-        <h3 className="text-lg font-medium text-gray-900 mb-4">
-          Enhanced Assignment Features
-        </h3>
-        
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div className="flex items-start gap-3 p-3 bg-green-50 rounded-lg">
-            <Map className="h-5 w-5 text-green-600 mt-0.5" />
-            <div>
-              <h4 className="font-medium text-green-900">Interactive Map View</h4>
-              <p className="text-sm text-green-700">
-                Visualize user locations on an interactive map with filtering capabilities
-              </p>
-            </div>
-          </div>
-          
-          <div className="flex items-start gap-3 p-3 bg-blue-50 rounded-lg">
-            <List className="h-5 w-5 text-blue-600 mt-0.5" />
-            <div>
-              <h4 className="font-medium text-blue-900">Detailed User List</h4>
-              <p className="text-sm text-blue-700">
-                Browse users with comprehensive address and profile information
-              </p>
-            </div>
-          </div>
-          
-          <div className="flex items-start gap-3 p-3 bg-purple-50 rounded-lg">
-            <MapPin className="h-5 w-5 text-purple-600 mt-0.5" />
-            <div>
-              <h4 className="font-medium text-purple-900">Location-Based Access</h4>
-              <p className="text-sm text-purple-700">
-                Assign specific geographic regions for targeted admin management
-              </p>
-            </div>
-          </div>
-          
-          <div className="flex items-start gap-3 p-3 bg-orange-50 rounded-lg">
-            <Users className="h-5 w-5 text-orange-600 mt-0.5" />
-            <div>
-              <h4 className="font-medium text-orange-900">Real User Data</h4>
-              <p className="text-sm text-orange-700">
-                Select from actual registered users with verified addresses
-              </p>
-            </div>
-          </div>
-        </div>
-      </div>
+      
 
       {/* User Selection Modal */}
       <UserSelectionModal

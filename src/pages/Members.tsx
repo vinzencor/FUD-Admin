@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Search, MoreVertical, Trash2, Crown, Store, Download, AlertTriangle, CheckCircle, Star } from 'lucide-react';
+import { Search, MoreVertical, Trash2, Crown, Store, Download, AlertTriangle, CheckCircle } from 'lucide-react';
 import { format, addMonths } from 'date-fns';
 
 import { Button } from '../components/ui/button';
@@ -72,63 +72,63 @@ export function Members() {
   const [showAdminLocationModal, setShowAdminLocationModal] = useState(false);
   const [adminLocationModalMode, setAdminLocationModalMode] = useState<'promote' | 'edit'>('promote');
   const [selectedMemberForAdmin, setSelectedMemberForAdmin] = useState<Member | null>(null);
-  const [featuredSellers, setFeaturedSellers] = useState<Set<string>>(new Set());
-  const [processingFeatured, setProcessingFeatured] = useState<string | null>(null);
+  // const [featuredSellers, setFeaturedSellers] = useState<Set<string>>(new Set());
+  // const [processingFeatured, setProcessingFeatured] = useState<string | null>(null);
 
 
-  // Load featured sellers
-  const loadFeaturedSellers = async () => {
-    try {
-      const { data, error } = await supabase
-        .from('featured_sellers')
-        .select('user_id')
-        .eq('is_active', true);
+  // // Load featured sellers
+  // const loadFeaturedSellers = async () => {
+  //   try {
+  //     const { data, error } = await supabase
+  //       .from('featured_sellers')
+  //       .select('user_id')
+  //       .eq('is_active', true);
 
-      if (error) throw error;
+  //     if (error) throw error;
 
-      const featuredUserIds = new Set(data?.map(fs => fs.user_id) || []);
-      setFeaturedSellers(featuredUserIds);
-    } catch (error) {
-      console.error('Error loading featured sellers:', error);
-    }
-  };
+  //     const featuredUserIds = new Set(data?.map(fs => fs.user_id) || []);
+  //     setFeaturedSellers(featuredUserIds);
+  //   } catch (error) {
+  //     console.error('Error loading featured sellers:', error);
+  //   }
+  // };
 
-  // Toggle featured seller status
-  const toggleFeaturedStatus = async (userId: string, userName: string) => {
-    if (!user?.id) return;
+  // // Toggle featured seller status
+  // const toggleFeaturedStatus = async (userId: string, userName: string) => {
+  //   if (!user?.id) return;
 
-    try {
-      setProcessingFeatured(userId);
+  //   try {
+  //     setProcessingFeatured(userId);
 
-      const { data, error } = await supabase.rpc('toggle_featured_seller', {
-        p_user_id: userId,
-        p_admin_id: user.id,
-        p_notes: `Featured/unfeatured by ${user.email} from Members section`
-      });
+  //     const { data, error } = await supabase.rpc('toggle_featured_seller', {
+  //       p_user_id: userId,
+  //       p_admin_id: user.id,
+  //       p_notes: `Featured/unfeatured by ${user.email} from Members section`
+  //     });
 
-      if (error) throw error;
+  //     if (error) throw error;
 
-      if (data?.success) {
-        // Update local state
-        const newFeaturedSellers = new Set(featuredSellers);
-        if (data.action === 'featured') {
-          newFeaturedSellers.add(userId);
-          alert(`${userName} has been added to featured sellers!`);
-        } else {
-          newFeaturedSellers.delete(userId);
-          alert(`${userName} has been removed from featured sellers.`);
-        }
-        setFeaturedSellers(newFeaturedSellers);
-      } else {
-        alert(data?.message || 'Failed to update featured status');
-      }
-    } catch (error) {
-      console.error('Error toggling featured status:', error);
-      alert('Failed to update featured status');
-    } finally {
-      setProcessingFeatured(null);
-    }
-  };
+  //     if (data?.success) {
+  //       // Update local state
+  //       const newFeaturedSellers = new Set(featuredSellers);
+  //       if (data.action === 'featured') {
+  //         newFeaturedSellers.add(userId);
+  //         alert(`${userName} has been added to featured sellers!`);
+  //       } else {
+  //         newFeaturedSellers.delete(userId);
+  //         alert(`${userName} has been removed from featured sellers.`);
+  //       }
+  //       setFeaturedSellers(newFeaturedSellers);
+  //     } else {
+  //       alert(data?.message || 'Failed to update featured status');
+  //     }
+  //   } catch (error) {
+  //     console.error('Error toggling featured status:', error);
+  //     alert('Failed to update featured status');
+  //   } finally {
+  //     setProcessingFeatured(null);
+  //   }
+  // };
 
   useEffect(() => {
     const fetchMembers = async () => {
@@ -265,7 +265,7 @@ export function Members() {
     };
 
     fetchMembers();
-    loadFeaturedSellers();
+    // loadFeaturedSellers();
   }, [user?.role]);
 
 
@@ -671,36 +671,8 @@ export function Members() {
                       View Only
                     </span>
                   </div>
-                ) : user?.role === 'super_admin' ? (
+                ) : user?.role === 'super_admin' && !member.isSeller ? (
                   <div className="mt-3 space-y-2">
-                    {/* Featured Seller Button - Only for sellers */}
-                    {member.isSeller && (
-                      <div className="flex justify-center">
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={(e) => {
-                            e.stopPropagation(); // Prevent card click
-                            toggleFeaturedStatus(member.id, member.name);
-                          }}
-                          disabled={processingFeatured === member.id}
-                          className={`flex items-center gap-1 text-xs min-w-[120px] ${
-                            featuredSellers.has(member.id)
-                              ? 'text-yellow-600 hover:text-yellow-700 border-yellow-300'
-                              : 'text-blue-600 hover:text-blue-700'
-                          }`}
-                        >
-                          <Star className={`h-3 w-3 ${featuredSellers.has(member.id) ? 'fill-current' : ''}`} />
-                          {processingFeatured === member.id
-                            ? 'Processing...'
-                            : featuredSellers.has(member.id)
-                              ? 'Remove Featured'
-                              : 'Add Featured'
-                          }
-                        </Button>
-                      </div>
-                    )}
-
                     {/* Role Management Buttons */}
                     {member.role === 'user' && (
                       <div className="flex justify-center">
@@ -752,6 +724,12 @@ export function Members() {
                       </Button>
                     </div>
                   </div>
+                ) : member.isSeller ? (
+                  <div className="mt-3 text-center">
+                    <span className="text-xs text-gray-500 px-2 py-1 bg-gray-100 rounded">
+                      No Actions
+                    </span>
+                  </div>
                 ) : null}
               </div>
             ))}
@@ -781,26 +759,26 @@ export function Members() {
               <table className="w-full">
                 <thead>
                   <tr className="border-b border-gray-200 bg-gray-50">
-                    <th className="px-6 py-3 text-left">
+                    <th className="px-3 py-3 text-left">
                       <div className="text-xs font-medium text-gray-500 uppercase tracking-wider">Member</div>
                     </th>
-                    <th className="px-6 py-3 text-left">
+                    <th className="px-3 py-3 text-left">
                       <div className="text-xs font-medium text-gray-500 uppercase tracking-wider">Contact</div>
                     </th>
-                    <th className="px-6 py-3 text-left">
+                    <th className="px-3 py-3 text-left">
                       <div className="text-xs font-medium text-gray-500 uppercase tracking-wider">Address</div>
                     </th>
-                    <th className="px-6 py-3 text-left">
+                    <th className="px-3 py-3 text-left">
                       <div className="text-xs font-medium text-gray-500 uppercase tracking-wider">User Type</div>
                     </th>
-                    <th className="px-6 py-3 text-left">
+                    <th className="px-3 py-3 text-left">
                       <div className="text-xs font-medium text-gray-500 uppercase tracking-wider">Role</div>
                     </th>
 
-                    <th className="px-6 py-3 text-left">
+                    <th className="px-3 py-3 text-left">
                       <div className="text-xs font-medium text-gray-500 uppercase tracking-wider">Join Date</div>
                     </th>
-                    <th className="px-6 py-3 text-center">
+                    <th className="px-3 py-3 text-center">
                       <div className="text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</div>
                     </th>
                   </tr>
@@ -815,7 +793,7 @@ export function Members() {
                     setShowProfileModal(true);
                   }}
                 >
-                  <td className="px-6 py-4">
+                  <td className="px-3 py-4">
                     <div className="flex items-center">
                       <div>
                         <div className="text-sm font-medium text-gray-900">{member.name}</div>
@@ -823,13 +801,13 @@ export function Members() {
                       </div>
                     </div>
                   </td>
-                  <td className="px-6 py-4">
+                  <td className="px-3 py-4">
                     <div className="text-sm text-gray-500">{member.phone}</div>
                   </td>
-                  <td className="px-6 py-4">
+                  <td className="px-3 py-4">
                     <div className="text-sm text-gray-900">{member.location}</div>
                   </td>
-                  <td className="px-6 py-4">
+                  <td className="px-3 py-4">
                     <div className="flex flex-col gap-1">
                       <span className={`px-2 py-1 text-xs font-medium rounded-full flex items-center gap-1 ${getUserTypeColor(member)}`}>
                         {member.isSeller && <Store className="h-3 w-3" />}
@@ -848,18 +826,18 @@ export function Members() {
                       )} */}
                     </div>
                   </td>
-                  <td className="px-6 py-4">
+                  <td className="px-3 py-4">
                     <span className={`px-2 py-1 text-xs font-medium rounded-full ${getRoleColor(member.role ?? '')}`}>
                       {getRoleLabel(member.role ?? '')}
                     </span>
                   </td>
 
-                  <td className="px-6 py-4">
+                  <td className="px-3 py-4">
                     <div className="text-sm text-gray-900">
                       {format(new Date(member.joinDate), 'MMM d, yyyy')}
                     </div>
                   </td>
-                  <td className="px-6 py-4 text-center">
+                  <td className="px-3 py-4 text-center">
                     {user?.role === 'admin' ? (
                       // Admin users can only view - no actions available
                       <div className="flex justify-center">
@@ -867,36 +845,10 @@ export function Members() {
                           View Only
                         </span>
                       </div>
-                    ) : user?.role === 'super_admin' ? (
-                      // Super admin has full access
+                    ) : user?.role === 'super_admin' && !member.isSeller ? (
+                      // Super admin has full access but only for non-sellers (buyers)
                       expandedRowId === member.id ? (
                         <div className="flex flex-col items-center gap-2 py-2">
-                          {/* Featured Seller Button - Only for sellers */}
-                          {member.isSeller && (
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              onClick={(e) => {
-                                e.stopPropagation(); // Prevent row click
-                                toggleFeaturedStatus(member.id, member.name);
-                              }}
-                              disabled={processingFeatured === member.id}
-                              className={`flex items-center gap-1 min-w-[130px] ${
-                                featuredSellers.has(member.id)
-                                  ? 'text-yellow-600 hover:text-yellow-700 border-yellow-300'
-                                  : 'text-blue-600 hover:text-blue-700'
-                              }`}
-                            >
-                              <Star className={`h-3 w-3 ${featuredSellers.has(member.id) ? 'fill-current' : ''}`} />
-                              {processingFeatured === member.id
-                                ? 'Processing...'
-                                : featuredSellers.has(member.id)
-                                  ? 'Remove Featured'
-                                  : 'Add Featured'
-                              }
-                            </Button>
-                          )}
-
                           {/* Role Management Buttons */}
                           {member.role === 'user' && (
                             <Button
@@ -965,6 +917,13 @@ export function Members() {
                           <MoreVertical className="h-4 w-4" />
                         </Button>
                       )
+                    ) : member.isSeller ? (
+                      // No actions for sellers
+                      <div className="flex justify-center">
+                        <span className="text-xs text-gray-500 px-2 py-1 bg-gray-100 rounded">
+                          No Actions
+                        </span>
+                      </div>
                     ) : null}
                   </td>
 
