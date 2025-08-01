@@ -515,7 +515,7 @@ export function Farmers() {
     <div className="space-y-6">
       <div className="flex justify-between items-center">
         <div>
-          <h2 className="text-2xl font-semibold text-gray-900">Farmers</h2>
+          <h2 className="text-2xl font-semibold text-gray-900">Seller</h2>
           <p className="text-gray-600 mt-1">
             Manage seller profiles and farmer accounts
             ({filteredFarmers.length} {searchTerm || statusFilter !== 'all' ? 'filtered' : 'total'}
