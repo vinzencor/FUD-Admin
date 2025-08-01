@@ -714,7 +714,7 @@ export function Feedback() {
                   {feedback.sellerName && (
                     <p className="text-sm text-gray-500">Seller: {feedback.sellerName}</p>
                   )}
-                  {user?.role === 'super_admin' && (
+                  {feedback.region && (
                     <p className="text-sm text-gray-500">Region: {feedback.region}</p>
                   )}
                 </div>

@@ -439,11 +439,7 @@ export function Buyers() {
                               </span>
                             )}
                           </div>
-                          {buyer.default_address && buyer.default_address.label && (
-                            <div className="text-xs text-blue-600 font-medium mt-1">
-                              📍 {buyer.default_address.label}
-                            </div>
-                          )}
+                          
                         </div>
                       </div>
                       <div className="flex items-center text-gray-600">
@@ -515,11 +511,7 @@ export function Buyers() {
                                 </span>
                               )}
                             </div>
-                            {buyer.default_address && buyer.default_address.label && (
-                              <div className="text-xs text-blue-600 font-medium">
-                                📍 {buyer.default_address.label}
-                              </div>
-                            )}
+                            
                             {buyer.fullAddress !== buyer.location && (
                               <div className="text-xs text-gray-500 truncate" title={buyer.location}>
                                 {buyer.location}
@@ -543,9 +535,7 @@ export function Buyers() {
                         <div className="text-sm text-gray-900">
                           {new Date(buyer.registrationDate).toLocaleDateString()}
                         </div>
-                        <div className="text-sm text-gray-500">
-                          Last active: {new Date(buyer.lastActive).toLocaleDateString()}
-                        </div>
+                        
                       </td>
                     </tr>
                   ))}
