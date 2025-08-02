@@ -187,9 +187,13 @@ export function Dashboard() {
 
   const fetchOrderDetails = async (orderId: string) => {
     try {
+      console.log('Fetching order details for ID:', orderId);
+
       // Check if it's an interest (prefixed with 'interest_')
       const isInterest = orderId.startsWith('interest_');
       const actualId = isInterest ? orderId.replace('interest_', '') : orderId;
+
+      console.log('Is interest:', isInterest, 'Actual ID:', actualId);
 
       let query;
       if (isInterest) {
@@ -242,14 +246,47 @@ export function Dashboard() {
 
       const { data, error } = await query;
 
+      console.log('Query result:', { data, error });
+
       if (error) {
         console.error('Error fetching order details:', error);
+        // Still show modal with basic info if detailed fetch fails
+        const basicOrder = recentOrders.find(order => order.id === orderId);
+        if (basicOrder) {
+          const mockDetailedOrder = {
+            id: basicOrder.id,
+            quantity: 1,
+            status: basicOrder.status,
+            created_at: basicOrder.created_at || new Date().toISOString(),
+            updated_at: basicOrder.created_at || new Date().toISOString(),
+            buyer: {
+              full_name: basicOrder.buyer,
+              email: 'N/A',
+              mobile_phone: 'N/A',
+              city: 'N/A',
+              state: 'N/A'
+            },
+            listing: {
+              name: basicOrder.product,
+              seller_name: basicOrder.seller,
+              price: '0',
+              unit: 'unit',
+              type: 'N/A'
+            }
+          };
+          console.log('Using basic order data:', mockDetailedOrder);
+          setSelectedOrder(mockDetailedOrder);
+          setShowDetailModal(true);
+        }
         return;
       }
 
       if (data) {
+        console.log('Setting selected order and showing modal');
         setSelectedOrder(data);
         setShowDetailModal(true);
+      } else {
+        console.log('No data returned from query');
       }
     } catch (err) {
       console.error('Error fetching order details:', err);
@@ -296,6 +333,37 @@ export function Dashboard() {
             className="text-sm text-primary-600 hover:text-primary-800 flex items-center"
           >
             Refresh Data
+          </button>
+          {/* Test Modal Button - Remove after testing */}
+          <button
+            onClick={() => {
+              console.log('Test modal button clicked');
+              setSelectedOrder({
+                id: 'test-123',
+                quantity: 2,
+                status: 'pending',
+                created_at: new Date().toISOString(),
+                updated_at: new Date().toISOString(),
+                buyer: {
+                  full_name: 'Test Buyer',
+                  email: 'test@example.com',
+                  mobile_phone: '123-456-7890',
+                  city: 'Test City',
+                  state: 'Test State'
+                },
+                listing: {
+                  name: 'Test Product',
+                  seller_name: 'Test Seller',
+                  price: '10.00',
+                  unit: 'kg',
+                  type: 'vegetable'
+                }
+              });
+              setShowDetailModal(true);
+            }}
+            className="text-sm text-blue-600 hover:text-blue-800 flex items-center px-2 py-1 border border-blue-300 rounded"
+          >
+            Test Modal
           </button>
           {(error?.includes('schema') || error?.includes('cache')) && (
             <button
