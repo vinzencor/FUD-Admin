@@ -501,6 +501,7 @@ export function Farmers() {
 
     return matchesStatus && matchesSearch;
   });
+  console.log(filteredFarmers,"farmersa")
 
   if (loading) {
     return (
@@ -880,8 +881,8 @@ export function Farmers() {
                           selectedFarmer?.status === 'suspended' ? 'bg-red-100 text-red-800' :
                           'bg-yellow-100 text-yellow-800'
                         }`}>
-                          {selectedFarmer
-                            ? selectedFarmer.status.charAt(0).toUpperCase() + selectedFarmer.status.slice(1)
+                          {selectedFarmer?.status
+                            ? selectedFarmer?.status?.charAt(0).toUpperCase() + selectedFarmer?.status?.slice(1)
                             : ''}
                         </span>
                       </div>
@@ -927,7 +928,7 @@ export function Farmers() {
                 <div className="space-y-3">
                   <h3 className="text-lg font-semibold text-gray-900">Features & Services</h3>
                   <div className="flex flex-wrap gap-2">
-                    {selectedSellerData.features.map((feature, index) => (
+                    {selectedSellerData?.features?.map((feature, index) => (
                       <span
                         key={index}
                         className="inline-flex px-3 py-1 text-xs font-medium bg-blue-100 text-blue-800 rounded-full"
