@@ -671,7 +671,7 @@ export function Members() {
                       View Only
                     </span>
                   </div>
-                ) : user?.role === 'super_admin' && !member.isSeller ? (
+                ) : user?.role === 'super_admin' ? (
                   <div className="mt-3 space-y-2">
                     {/* Role Management Buttons */}
                     {member.role === 'user' && (
@@ -723,12 +723,6 @@ export function Members() {
                         Delete
                       </Button>
                     </div>
-                  </div>
-                ) : member.isSeller ? (
-                  <div className="mt-3 text-center">
-                    <span className="text-xs text-gray-500 px-2 py-1 bg-gray-100 rounded">
-                      No Actions
-                    </span>
                   </div>
                 ) : null}
               </div>
@@ -845,8 +839,8 @@ export function Members() {
                           View Only
                         </span>
                       </div>
-                    ) : user?.role === 'super_admin' && !member.isSeller ? (
-                      // Super admin has full access but only for non-sellers (buyers)
+                    ) : user?.role === 'super_admin' ? (
+                      // Super admin has full access to all members (buyers and sellers)
                       expandedRowId === member.id ? (
                         <div className="flex flex-col items-center gap-2 py-2">
                           {/* Role Management Buttons */}
@@ -917,13 +911,6 @@ export function Members() {
                           <MoreVertical className="h-4 w-4" />
                         </Button>
                       )
-                    ) : member.isSeller ? (
-                      // No actions for sellers
-                      <div className="flex justify-center">
-                        <span className="text-xs text-gray-500 px-2 py-1 bg-gray-100 rounded">
-                          No Actions
-                        </span>
-                      </div>
                     ) : null}
                   </td>
 
