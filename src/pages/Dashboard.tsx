@@ -86,6 +86,7 @@ export function Dashboard() {
       let adminLocationFilter: AdminLocation | null = null;
       if (user?.role === 'admin' && user?.id) {
         adminLocationFilter = await getAdminAssignedLocation(user.id);
+        console.log('Dashboard - Admin location filter:', adminLocationFilter);
       }
 
       // Set the admin location state for display

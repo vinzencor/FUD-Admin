@@ -1,4 +1,5 @@
 import { supabase } from '../supabaseClient';
+import { useAuthStore } from '../store/authStore';
 
 export interface CoverImage {
   id: string;
@@ -96,10 +97,16 @@ export async function uploadCoverImage(file: File, fileName: string): Promise<Up
 }
 
 /**
- * Save new cover image to database and set as active
+ * Save new cover image to database and set as active (super admin only)
  */
 export async function saveCoverImage(name: string, imageUrl: string, userId?: string): Promise<boolean> {
   try {
+    // Security check: Only super admin can save cover images
+    const user = useAuthStore.getState().user;
+    if (user?.role !== 'super_admin') {
+      console.error('Access denied: Only super admin can save cover images');
+      return false;
+    }
     // Start a transaction to ensure consistency
     const { error: deactivateError } = await supabase
       .from('cover_images')
@@ -134,10 +141,16 @@ export async function saveCoverImage(name: string, imageUrl: string, userId?: st
 }
 
 /**
- * Set an existing cover image as active
+ * Set an existing cover image as active (super admin only)
  */
 export async function setActiveCoverImage(imageId: string): Promise<boolean> {
   try {
+    // Security check: Only super admin can set active cover images
+    const user = useAuthStore.getState().user;
+    if (user?.role !== 'super_admin') {
+      console.error('Access denied: Only super admin can set active cover images');
+      return false;
+    }
     // Deactivate all cover images
     const { error: deactivateError } = await supabase
       .from('cover_images')
@@ -168,10 +181,16 @@ export async function setActiveCoverImage(imageId: string): Promise<boolean> {
 }
 
 /**
- * Delete a cover image
+ * Delete a cover image (super admin only)
  */
 export async function deleteCoverImage(imageId: string, imageUrl: string): Promise<boolean> {
   try {
+    // Security check: Only super admin can delete cover images
+    const user = useAuthStore.getState().user;
+    if (user?.role !== 'super_admin') {
+      console.error('Access denied: Only super admin can delete cover images');
+      return false;
+    }
     // Extract file path from URL for storage deletion
     const urlParts = imageUrl.split('/');
     const fileName = urlParts[urlParts.length - 1];

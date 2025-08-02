@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Search, Star, StarOff, Eye, X, MapPin, Clock, User, Store, Crown, RefreshCw, Check } from 'lucide-react';
 import { useAuthStore } from '../store/authStore';
 import { supabase } from '../supabaseClient';
+import { getAdminAssignedLocation, AdminLocation, applyLocationFilter } from '../services/locationAdminService';
 
 interface FeaturedSeller {
   id: string;
@@ -91,8 +92,14 @@ export function FeaturedSellers() {
 
   const loadAllUsers = async () => {
     try {
+      // Get admin's assigned location for filtering
+      let adminLocationFilter: AdminLocation | null = null;
+      if (user?.role === 'admin' && user?.id) {
+        adminLocationFilter = await getAdminAssignedLocation(user.id);
+      }
+
       // Only load users who are sellers (have seller profiles or default_mode includes seller)
-      const { data: users, error: usersError } = await supabase
+      let userQuery = supabase
         .from('users')
         .select(`
           id,
@@ -108,6 +115,14 @@ export function FeaturedSellers() {
         .not('full_name', 'is', null)
         .or('default_mode.eq.seller,default_mode.eq.both') // Only sellers or both
         .order('full_name');
+
+      // Apply location filter for regional admins
+      if (adminLocationFilter) {
+        userQuery = applyLocationFilter(userQuery, adminLocationFilter);
+        console.log('Applied location filter to featured sellers:', adminLocationFilter);
+      }
+
+      const { data: users, error: usersError } = await userQuery;
 
       if (usersError) throw usersError;
 
