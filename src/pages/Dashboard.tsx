@@ -318,7 +318,6 @@ export function Dashboard() {
           </h2>
           {adminLocation ? (
             <div className="mt-2 text-sm text-blue-600 bg-blue-50 px-3 py-1 rounded-full inline-block">
-              📍 Viewing data for: {adminLocation.zipcode ? `Zipcode ${adminLocation.zipcode}, ` : ''}{adminLocation.city}, {adminLocation.district}, {adminLocation.country}
             </div>
           ) : user?.role === 'super_admin' ? (
             <div className="mt-2 text-sm text-purple-600 bg-purple-50 px-3 py-1 rounded-full inline-block">
@@ -335,7 +334,7 @@ export function Dashboard() {
             Refresh Data
           </button>
           {/* Test Modal Button - Remove after testing */}
-          <button
+          {/* <button
             onClick={() => {
               console.log('Test modal button clicked');
               setSelectedOrder({
@@ -364,7 +363,7 @@ export function Dashboard() {
             className="text-sm text-blue-600 hover:text-blue-800 flex items-center px-2 py-1 border border-blue-300 rounded"
           >
             Test Modal
-          </button>
+          </button> */}
           {(error?.includes('schema') || error?.includes('cache')) && (
             <button
               onClick={refreshSchemaCache}

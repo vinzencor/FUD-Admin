@@ -320,16 +320,32 @@ export async function getLocationFilteredUserIds(location: AdminLocation | null)
   try {
     let query = supabase.from('users').select('id');
 
+    // Apply hierarchical filtering: Country → State → City → Zipcode
     if (location.country) {
       query = query.ilike('country', `%${location.country}%`);
     }
+
+    if (location.state) {
+      query = query.ilike('state', `%${location.state}%`);
+    }
+
     if (location.city) {
       query = query.ilike('city', `%${location.city}%`);
     }
+
     if (location.district) {
-      query = query.ilike('state', `%${location.district}%`); // Using state field as district for now
+      query = query.ilike('district', `%${location.district}%`);
     }
-    // TODO: Add street-level filtering once we have proper address fields
+
+    // Zipcode filtering - most specific level
+    if (location.zipcode) {
+      // Check if it's a real zipcode from database or generated one
+      if (!location.zipcode.match(/^[A-Z]{3}\d{3}$/)) {
+        // Real zipcode - filter by zipcode field
+        query = query.or(`zip_code.eq.${location.zipcode},postal_code.eq.${location.zipcode}`);
+      }
+      // For generated zipcodes, rely on city/country filtering above
+    }
 
     const { data, error } = await query;
 
@@ -476,12 +492,11 @@ export function applyLocationFilter(
 
   const prefix = tableAlias ? `${tableAlias}.` : '';
 
-  // Apply filters based on assignment level and available location data
+  // Apply hierarchical filtering: Country → State → City → District → Zipcode
   if (location.country) {
     query = query.ilike(`${prefix}country`, `%${location.country}%`);
   }
 
-  // State-level filtering (new hierarchy level)
   if (location.state) {
     query = query.ilike(`${prefix}state`, `%${location.state}%`);
   }
@@ -490,26 +505,25 @@ export function applyLocationFilter(
     query = query.ilike(`${prefix}city`, `%${location.city}%`);
   }
 
-  // District filtering (for backward compatibility)
   if (location.district) {
     query = query.ilike(`${prefix}district`, `%${location.district}%`);
   }
 
-  // Add zipcode filtering (most specific level)
+  // Zipcode filtering (most specific level)
   if (location.zipcode) {
-    // For generated zipcodes (like "NYC001"), we don't filter by zipcode field
-    // since users don't have these values - city/country filtering is sufficient
+    // Check if it's a real zipcode from database or generated one
     if (!location.zipcode.match(/^[A-Z]{3}\d{3}$/)) {
-      // Real zipcode from database - try to filter by zipcode field
+      // Real zipcode - filter by both zip_code and postal_code fields
       try {
-        query = query.eq(`${prefix}zipcode`, location.zipcode);
-        console.log('Applied zipcode filter:', location.zipcode);
+        query = query.or(`${prefix}zip_code.eq.${location.zipcode},${prefix}postal_code.eq.${location.zipcode}`);
+        console.log('Applied real zipcode filter:', location.zipcode);
       } catch (error) {
-        console.warn('Zipcode field filtering failed, using city/country only:', error);
-        // Continue with city/country filtering
+        console.warn('Zipcode field filtering failed, using city/state filtering:', error);
+        // Continue with city/state filtering above
       }
     } else {
-      console.log('Using generated zipcode, filtering by city/country only:', location.zipcode);
+      console.log('Using generated zipcode, filtering by geographic location only:', location.zipcode);
+      // For generated zipcodes, rely on city/state/country filtering above
     }
   }
 
