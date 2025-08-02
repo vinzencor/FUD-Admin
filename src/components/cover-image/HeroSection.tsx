@@ -26,8 +26,8 @@ export function HeroSection({
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string>('');
 
-  // Check if user can edit (admin or super_admin)
-  const canEdit = user?.role === 'admin' || user?.role === 'super_admin';
+  // Check if user can edit (super_admin only)
+  const canEdit = user?.role === 'super_admin';
 
   const loadCoverImage = async () => {
     try {

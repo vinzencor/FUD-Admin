@@ -67,7 +67,11 @@ export async function getAdminAssignedLocation(userId: string): Promise<AdminLoc
       return null;
     }
 
-    return data?.admin_assigned_location || null;
+    const locationData = data?.admin_assigned_location;
+    if (!locationData) return null;
+
+    // Parse the location data properly
+    return parseAdminLocation(locationData);
   } catch (error) {
     console.error('Error in getAdminAssignedLocation:', error);
     return null;
@@ -320,21 +324,27 @@ export async function getLocationFilteredUserIds(location: AdminLocation | null)
   try {
     let query = supabase.from('users').select('id');
 
-    // Apply hierarchical filtering: Country → State → City → Zipcode
+    console.log('Getting location-filtered user IDs for:', location);
+
+    // Apply hierarchical filtering with exact matches
     if (location.country) {
-      query = query.ilike('country', `%${location.country}%`);
+      query = query.eq('country', location.country);
+      console.log('Filtering users by country:', location.country);
     }
 
     if (location.state) {
-      query = query.ilike('state', `%${location.state}%`);
+      query = query.eq('state', location.state);
+      console.log('Filtering users by state:', location.state);
     }
 
     if (location.city) {
-      query = query.ilike('city', `%${location.city}%`);
+      query = query.eq('city', location.city);
+      console.log('Filtering users by city:', location.city);
     }
 
     if (location.district) {
-      query = query.ilike('district', `%${location.district}%`);
+      query = query.eq('district', location.district);
+      console.log('Filtering users by district:', location.district);
     }
 
     // Zipcode filtering - most specific level
@@ -343,6 +353,7 @@ export async function getLocationFilteredUserIds(location: AdminLocation | null)
       if (!location.zipcode.match(/^[A-Z]{3}\d{3}$/)) {
         // Real zipcode - filter by zipcode field
         query = query.or(`zip_code.eq.${location.zipcode},postal_code.eq.${location.zipcode}`);
+        console.log('Filtering users by zipcode:', location.zipcode);
       }
       // For generated zipcodes, rely on city/country filtering above
     }
@@ -354,6 +365,7 @@ export async function getLocationFilteredUserIds(location: AdminLocation | null)
       return [];
     }
 
+    console.log(`Found ${data?.length || 0} users matching location filter`);
     return data?.map(user => user.id) || [];
   } catch (error) {
     console.error('Error in getLocationFilteredUserIds:', error);
@@ -492,21 +504,31 @@ export function applyLocationFilter(
 
   const prefix = tableAlias ? `${tableAlias}.` : '';
 
-  // Apply hierarchical filtering: Country → State → City → District → Zipcode
+  console.log('Applying location filter:', location);
+
+  // Apply hierarchical filtering with exact matches for better precision
   if (location.country) {
-    query = query.ilike(`${prefix}country`, `%${location.country}%`);
+    // Use exact match for country to avoid US matching USA, etc.
+    query = query.eq(`${prefix}country`, location.country);
+    console.log('Applied country filter:', location.country);
   }
 
   if (location.state) {
-    query = query.ilike(`${prefix}state`, `%${location.state}%`);
+    // Use exact match for state
+    query = query.eq(`${prefix}state`, location.state);
+    console.log('Applied state filter:', location.state);
   }
 
   if (location.city) {
-    query = query.ilike(`${prefix}city`, `%${location.city}%`);
+    // Use exact match for city
+    query = query.eq(`${prefix}city`, location.city);
+    console.log('Applied city filter:', location.city);
   }
 
   if (location.district) {
-    query = query.ilike(`${prefix}district`, `%${location.district}%`);
+    // Use exact match for district
+    query = query.eq(`${prefix}district`, location.district);
+    console.log('Applied district filter:', location.district);
   }
 
   // Zipcode filtering (most specific level)
@@ -540,41 +562,49 @@ export function doesUserMatchLocation(
 ): boolean {
   if (!adminLocation) return true; // Super admin has no restrictions
 
-  // Check country match (required if admin has country assignment)
+  console.log('Checking user location match:', { userLocation, adminLocation });
+
+  // Check country match (exact match required if admin has country assignment)
   if (adminLocation.country && userLocation.country) {
-    if (!userLocation.country.toLowerCase().includes(adminLocation.country.toLowerCase())) {
+    if (userLocation.country.toLowerCase().trim() !== adminLocation.country.toLowerCase().trim()) {
+      console.log('Country mismatch:', userLocation.country, '!==', adminLocation.country);
       return false;
     }
   }
 
-  // Check state match (required if admin has state assignment)
+  // Check state match (exact match required if admin has state assignment)
   if (adminLocation.state && userLocation.state) {
-    if (!userLocation.state.toLowerCase().includes(adminLocation.state.toLowerCase())) {
+    if (userLocation.state.toLowerCase().trim() !== adminLocation.state.toLowerCase().trim()) {
+      console.log('State mismatch:', userLocation.state, '!==', adminLocation.state);
       return false;
     }
   }
 
-  // Check city match (required if admin has city assignment)
+  // Check city match (exact match required if admin has city assignment)
   if (adminLocation.city && userLocation.city) {
-    if (!userLocation.city.toLowerCase().includes(adminLocation.city.toLowerCase())) {
+    if (userLocation.city.toLowerCase().trim() !== adminLocation.city.toLowerCase().trim()) {
+      console.log('City mismatch:', userLocation.city, '!==', adminLocation.city);
       return false;
     }
   }
 
   // Check district match (for backward compatibility)
   if (adminLocation.district && userLocation.state) {
-    if (!userLocation.state.toLowerCase().includes(adminLocation.district.toLowerCase())) {
+    if (userLocation.state.toLowerCase().trim() !== adminLocation.district.toLowerCase().trim()) {
+      console.log('District mismatch:', userLocation.state, '!==', adminLocation.district);
       return false;
     }
   }
 
-  // Check zipcode match (most specific level)
+  // Check zipcode match (exact match required)
   if (adminLocation.zipcode && userLocation.zipcode) {
     if (userLocation.zipcode !== adminLocation.zipcode) {
+      console.log('Zipcode mismatch:', userLocation.zipcode, '!==', adminLocation.zipcode);
       return false;
     }
   }
 
+  console.log('User location matches admin location');
   return true;
 }
 

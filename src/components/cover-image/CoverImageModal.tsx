@@ -17,6 +17,11 @@ type ModalStep = 'upload' | 'crop' | 'preview' | 'saving';
 export function CoverImageModal({ isOpen, onClose, onImageUpdated }: CoverImageModalProps) {
   const user = useAuthStore((state) => state.user);
   const [currentStep, setCurrentStep] = useState<ModalStep>('upload');
+
+  // Security check: Only super admin can edit cover images
+  if (user?.role !== 'super_admin') {
+    return null;
+  }
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [imagePreviewUrl, setImagePreviewUrl] = useState<string>('');
   const [croppedImageBlob, setCroppedImageBlob] = useState<Blob | null>(null);

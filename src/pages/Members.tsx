@@ -137,6 +137,7 @@ export function Members() {
         let adminLocation: AdminLocation | null = null;
         if (user?.role === 'admin' && user?.id) {
           adminLocation = await getAdminAssignedLocation(user.id);
+          console.log('Members - Admin location filter:', adminLocation);
         }
 
         // First, try to get users from the database including role
