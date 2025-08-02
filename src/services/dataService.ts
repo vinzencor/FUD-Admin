@@ -1,5 +1,5 @@
 import { supabase } from '../supabaseClient';
-import { AdminLocation } from './locationAdminService';
+import { AdminLocation, applyLocationFilter } from './locationAdminService';
 
 /**
  * Get user IDs that match the admin's location filter (including zipcode-level filtering)
@@ -241,29 +241,10 @@ export async function fetchAllSellers(adminLocation?: AdminLocation | null): Pro
       .select('id, full_name, email, mobile_phone, street_address, apartment_unit, city, state, district, country, zip_code, postal_code, coordinates, created_at')
       .in('id', userIds);
 
-    // Apply location filter for regional admins with zipcode-level granularity
+    // Apply comprehensive location filter for regional admins
     if (adminLocation) {
-      if (adminLocation.country) {
-        userQuery = userQuery.ilike('country', `%${adminLocation.country}%`);
-      }
-      if (adminLocation.city) {
-        userQuery = userQuery.ilike('city', `%${adminLocation.city}%`);
-      }
-      if (adminLocation.district) {
-        userQuery = userQuery.ilike('state', `%${adminLocation.district}%`); // Using state field as district
-      }
-      if (adminLocation.zipcode) {
-        // For generated zipcodes (like "NYC001"), we need a different approach
-        if (adminLocation.zipcode.match(/^[A-Z]{3}\d{3}$/)) {
-          // This is a generated zipcode, so we don't filter by it since users don't have these values
-          // The filtering by country and city is sufficient for generated zipcodes
-          console.log('Using generated zipcode, filtering by city/country only');
-        } else {
-          // Real zipcode from database, filter by it
-          // Use a simpler approach to avoid or() syntax issues with special characters
-          userQuery = userQuery.eq('zipcode', adminLocation.zipcode);
-        }
-      }
+      userQuery = applyLocationFilter(userQuery, adminLocation);
+      console.log('Applied location filter for sellers:', adminLocation);
     }
 
     const { data: users, error: userError } = await userQuery;

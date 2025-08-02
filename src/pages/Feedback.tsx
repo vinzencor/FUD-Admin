@@ -4,7 +4,7 @@ import { useAuthStore } from '../store/authStore';
 import { supabase } from '../supabaseClient';
 // import { fetchAllFeedback } from '../services/dataService'; // Using direct queries for now
 import { exportWithLoading, generateFilename, formatDateForExport, ExportColumn } from '../utils/exportUtils';
-import { getAdminAssignedLocation, AdminLocation } from '../services/locationAdminService';
+import { getAdminAssignedLocation, AdminLocation, applyLocationFilter } from '../services/locationAdminService';
 
 interface Feedback {
   id: string;
@@ -88,26 +88,8 @@ export function Feedback() {
           .not('full_name', 'is', null)
           .not('email', 'is', null);
 
-        // Apply location filters
-        if (adminLocationFilter.country) {
-          userQuery = userQuery.ilike('country', `%${adminLocationFilter.country}%`);
-        }
-        if (adminLocationFilter.city) {
-          userQuery = userQuery.ilike('city', `%${adminLocationFilter.city}%`);
-        }
-        if (adminLocationFilter.district) {
-          userQuery = userQuery.ilike('state', `%${adminLocationFilter.district}%`);
-        }
-        if (adminLocationFilter.zipcode) {
-          // For generated zipcodes, don't filter by zipcode field
-          if (!adminLocationFilter.zipcode.match(/^[A-Z]{3}\d{3}$/)) {
-            try {
-              userQuery = userQuery.eq('zipcode', adminLocationFilter.zipcode);
-            } catch (error) {
-              console.warn('Zipcode field filtering failed, using city/country only:', error);
-            }
-          }
-        }
+        // Apply centralized location filtering
+        userQuery = applyLocationFilter(userQuery, adminLocationFilter);
 
         const { data: locationUsers } = await userQuery;
         locationFilteredUserIds = locationUsers?.map(u => u.id) || [];
