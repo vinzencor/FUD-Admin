@@ -25,6 +25,7 @@ interface AuthState {
   user: User | null;
   login: (user: User) => void;
   logout: () => void;
+  updateUser: (user: User) => void;
   updatePermissions: (permissions: User['permissions']) => void;
 }
 
@@ -34,6 +35,7 @@ export const useAuthStore = create<AuthState>()(
       user: null,
       login: (user) => set({ user }),
       logout: () => set({ user: null }),
+      updateUser: (user) => set({ user }),
       updatePermissions: (permissions) =>
         set((state) => ({
           user: state.user ? { ...state.user, permissions } : null,

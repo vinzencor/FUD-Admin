@@ -6,12 +6,22 @@ import { getAdminAssignedLocation, AdminLocation } from '../services/locationAdm
 
 export function Settings() {
   const user = useAuthStore((state) => state.user);
+  const updateUser = useAuthStore((state) => state.updateUser);
   const [adminLocation, setAdminLocation] = useState<AdminLocation | null | undefined>(undefined);
   const [notifications, setNotifications] = useState({
     email: true,
     dashboard: true,
     updates: false
   });
+
+  // Profile form state
+  const [profileForm, setProfileForm] = useState({
+    name: user?.name || '',
+    email: user?.email || ''
+  });
+  const [profileLoading, setProfileLoading] = useState(false);
+  const [profileSuccess, setProfileSuccess] = useState(false);
+  const [profileError, setProfileError] = useState<string | null>(null);
 
   // Password change modal state
   const [showPasswordModal, setShowPasswordModal] = useState(false);
@@ -29,7 +39,7 @@ export function Settings() {
   const [passwordError, setPasswordError] = useState<string | null>(null);
   const [passwordSuccess, setPasswordSuccess] = useState(false);
 
-  // Load admin location on component mount
+  // Load admin location and initialize profile form on component mount
   useEffect(() => {
     const loadAdminLocation = async () => {
       try {
@@ -47,6 +57,11 @@ export function Settings() {
     };
 
     if (user) {
+      // Initialize profile form with current user data
+      setProfileForm({
+        name: user.name || '',
+        email: user.email || ''
+      });
       loadAdminLocation();
     }
   }, [user]);
@@ -185,6 +200,46 @@ export function Settings() {
     });
   };
 
+  const handleSaveProfile = async () => {
+    try {
+      setProfileLoading(true);
+      setProfileError(null);
+
+      // Update user profile in database
+      const { error } = await supabase
+        .from('users')
+        .update({
+          full_name: profileForm.name,
+          email: profileForm.email
+        })
+        .eq('id', user?.id);
+
+      if (error) {
+        throw error;
+      }
+
+      // Update local auth store
+      updateUser({
+        ...user,
+        name: profileForm.name,
+        email: profileForm.email
+      });
+
+      setProfileSuccess(true);
+
+      // Hide success message after 3 seconds
+      setTimeout(() => {
+        setProfileSuccess(false);
+      }, 3000);
+
+    } catch (error: any) {
+      console.error('Error updating profile:', error);
+      setProfileError(error.message || 'Failed to update profile');
+    } finally {
+      setProfileLoading(false);
+    }
+  };
+
   return (
     <div className="space-y-6">
       <div className="flex justify-between items-center">
@@ -199,7 +254,8 @@ export function Settings() {
               <label className="block text-sm font-medium text-gray-700">Name</label>
               <input
                 type="text"
-                defaultValue={user?.name}
+                value={profileForm.name}
+                onChange={(e) => setProfileForm({ ...profileForm, name: e.target.value })}
                 className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-primary-500 focus:border-primary-500"
               />
             </div>
@@ -208,7 +264,8 @@ export function Settings() {
               <label className="block text-sm font-medium text-gray-700">Email</label>
               <input
                 type="email"
-                defaultValue={user?.email}
+                value={profileForm.email}
+                onChange={(e) => setProfileForm({ ...profileForm, email: e.target.value })}
                 className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-primary-500 focus:border-primary-500"
               />
             </div>
@@ -367,9 +424,31 @@ export function Settings() {
       </div>
 
       <div className="flex justify-end">
-        <button className="bg-primary-600 text-white px-6 py-2 rounded-md hover:bg-primary-700">
-          Save Changes
-        </button>
+        <div className="flex items-center gap-4">
+          {profileSuccess && (
+            <div className="text-green-600 text-sm flex items-center gap-1">
+              <svg className="h-4 w-4" fill="currentColor" viewBox="0 0 20 20">
+                <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+              </svg>
+              Profile updated successfully!
+            </div>
+          )}
+          {profileError && (
+            <div className="text-red-600 text-sm">
+              {profileError}
+            </div>
+          )}
+          <button
+            onClick={handleSaveProfile}
+            disabled={profileLoading}
+            className="bg-primary-600 text-white px-6 py-2 rounded-md hover:bg-primary-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+          >
+            {profileLoading && (
+              <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+            )}
+            Save Changes
+          </button>
+        </div>
       </div>
 
       {/* Password Change Modal */}
