@@ -222,7 +222,6 @@ export function Reports() {
           <p className="text-gray-600 mt-1">Revenue and performance analytics based on accepted orders</p>
           {adminLocation ? (
             <div className="mt-2 text-sm text-blue-600 bg-blue-50 px-3 py-1 rounded-full inline-block">
-              📍 Viewing data for: {adminLocation.zipcode ? `Zipcode ${adminLocation.zipcode}, ` : ''}{adminLocation.city}, {adminLocation.district}, {adminLocation.country}
             </div>
           ) : user?.role === 'super_admin' ? (
             <div className="mt-2 text-sm text-purple-600 bg-purple-50 px-3 py-1 rounded-full inline-block">
