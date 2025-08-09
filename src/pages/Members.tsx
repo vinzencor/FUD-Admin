@@ -12,6 +12,7 @@ import {
 import { useNavigate } from 'react-router-dom';
 import { useAuthStore } from '../store/authStore';
 import { supabase } from '../supabaseClient';
+import { deleteUserWithCascade } from '../services/dataService';
 import { updateUserRole, roleLabels, roleDescriptions } from '../utils/roleManagement';
 import { exportWithLoading, generateFilename, formatDateForExport, formatBooleanForExport, EXPORT_COLUMNS } from '../utils/exportUtils';
 import { AdminLocationModal } from '../components/admin/AdminLocationModal';
@@ -323,17 +324,46 @@ export function Members() {
       return;
     }
 
-    const confirmed = window.confirm('Are you sure you want to delete this member?');
+    const memberToDelete = members.find(m => m.id === memberId);
+    const memberName = memberToDelete?.name || 'this member';
+
+    const confirmed = window.confirm(
+      `Are you sure you want to delete ${memberName}?\n\n` +
+      'This will permanently remove:\n' +
+      '• The user account\n' +
+      '• All their products/listings\n' +
+      '• All their orders and interests\n' +
+      '• All their reviews and feedback\n' +
+      '• Their seller profile (if applicable)\n\n' +
+      'This action cannot be undone!'
+    );
+
     if (!confirmed) return;
 
-    const { error } = await supabase.from('users').delete().eq('id', memberId);
+    // Show loading state
+    const originalMembers = [...members];
+    setMembers(members.map(m =>
+      m.id === memberId
+        ? { ...m, isDeleting: true }
+        : m
+    ));
 
-    if (error) {
-      console.error('Error deleting member:', error.message);
-      alert('Failed to delete member.');
-    } else {
-      setMembers(members.filter((m) => m.id !== memberId));
-      alert('Member deleted successfully.');
+    try {
+      const result = await deleteUserWithCascade(memberId);
+
+      if (result.success) {
+        setMembers(members.filter((m) => m.id !== memberId));
+        alert(`${memberName} and all related data have been deleted successfully.`);
+      } else {
+        // Restore original state on error
+        setMembers(originalMembers);
+        alert(`Failed to delete ${memberName}: ${result.error}`);
+      }
+    } catch (error: any) {
+      // Restore original state on error
+      setMembers(originalMembers);
+      console.error('Error deleting member:', error);
+      alert(`Failed to delete ${memberName}: ${error.message || 'Unknown error'}`);
     }
   };
 
