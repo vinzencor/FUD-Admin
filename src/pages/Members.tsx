@@ -13,6 +13,7 @@ import { useNavigate } from 'react-router-dom';
 import { useAuthStore } from '../store/authStore';
 import { supabase } from '../supabaseClient';
 import { deleteUserWithCascade } from '../services/dataService';
+import { useAuditLog } from '../hooks/useAuditLog';
 import { updateUserRole, roleLabels, roleDescriptions } from '../utils/roleManagement';
 import { exportWithLoading, generateFilename, formatDateForExport, formatBooleanForExport, EXPORT_COLUMNS } from '../utils/exportUtils';
 import { AdminLocationModal } from '../components/admin/AdminLocationModal';
@@ -57,6 +58,7 @@ interface Member {
 export function Members() {
   const navigate = useNavigate();
   const user = useAuthStore((state) => state.user);
+  const { logUserDeleted, logRoleChanged, logDataExported } = useAuditLog();
 
   const [userTypeFilter, setUserTypeFilter] = useState<'all' | 'buyer' | 'seller' | 'both'>('all');
   const [searchTerm, setSearchTerm] = useState('');
@@ -352,6 +354,14 @@ export function Members() {
       const result = await deleteUserWithCascade(memberId);
 
       if (result.success) {
+        // Log successful deletion
+        await logUserDeleted(memberId, {
+          name: memberName,
+          email: memberToDelete?.email,
+          deleted_by: user?.id,
+          cascade_deleted: ['products', 'orders', 'reviews', 'feedback', 'seller_profile']
+        });
+
         setMembers(members.filter((m) => m.id !== memberId));
         alert(`${memberName} and all related data have been deleted successfully.`);
       } else {

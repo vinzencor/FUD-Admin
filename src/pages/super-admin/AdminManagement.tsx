@@ -19,6 +19,7 @@ import {
 import { Button } from '../../components/ui/button';
 import { Badge } from '../../components/ui/badge';
 import { useAuthStore } from '../../store/authStore';
+import { useAuditLog } from '../../hooks/useAuditLog';
 import {
   getAllAdminUsers,
   getAdminActivityStats,
@@ -38,6 +39,7 @@ import { exportWithLoading, generateFilename, ExportColumn } from '../../utils/e
 
 export function AdminManagement() {
   const user = useAuthStore((state) => state.user);
+  const { logAdminAssigned, logRoleChanged, logDataExported } = useAuditLog();
   const [admins, setAdmins] = useState<AdminUser[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -185,6 +187,15 @@ export function AdminManagement() {
       const success = await demoteAdminToUser(adminId);
 
       if (success) {
+        // Log the role change
+        await logRoleChanged(adminId, {
+          old_role: adminRole,
+          new_role: 'user',
+          changed_by: user?.id,
+          admin_name: adminName,
+          action_type: 'demotion'
+        });
+
         // Remove from admin list
         setAdmins(admins.filter(admin => admin.id !== adminId));
 

@@ -15,6 +15,7 @@ import {
   Activity,
   Home,
   UserCog,
+  Shield,
 } from 'lucide-react';
 import { cn } from '../../lib/utils';
 import { useAuthStore } from '../../store/authStore';
@@ -41,6 +42,7 @@ export function Sidebar() {
     // Super admin only navigation
     ...(user?.role === 'super_admin' ? [
       { name: 'Admin Management', to: `${basePath}/admin-management`, icon: UserCog },
+      { name: 'Audit Log', to: `${basePath}/audit-log`, icon: Shield },
     ] : []),
     { name: 'Settings', to: `${basePath}/settings`, icon: Settings },
   ];

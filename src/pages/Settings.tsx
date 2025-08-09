@@ -3,10 +3,12 @@ import { useAuthStore } from '../store/authStore';
 import { supabase } from '../supabaseClient';
 import { Eye, EyeOff, X, Lock, MapPin, Globe } from 'lucide-react';
 import { getAdminAssignedLocation, AdminLocation } from '../services/locationAdminService';
+import { useAuditLog } from '../hooks/useAuditLog';
 
 export function Settings() {
   const user = useAuthStore((state) => state.user);
   const updateUser = useAuthStore((state) => state.updateUser);
+  const { logPasswordChanged, logUserUpdated } = useAuditLog();
   const [adminLocation, setAdminLocation] = useState<AdminLocation | null | undefined>(undefined);
   const [notifications, setNotifications] = useState({
     email: true,
@@ -169,6 +171,15 @@ export function Settings() {
         confirmPassword: ''
       });
 
+      // Log the password change
+      await logPasswordChanged(user?.id || '', {
+        changed_by: user?.id,
+        is_self_change: true,
+        is_admin_reset: false,
+        user_role: user?.role,
+        change_method: isSuperAdmin ? 'super_admin_direct' : 'current_password_verification'
+      });
+
       // Close modal after 2 seconds
       setTimeout(() => {
         setShowPasswordModal(false);
@@ -226,6 +237,16 @@ export function Settings() {
           email: profileForm.email
         });
       }
+
+      // Log the profile update
+      await logUserUpdated(user?.id || '', {
+        old_name: user?.name,
+        new_name: profileForm.name,
+        old_email: user?.email,
+        new_email: profileForm.email,
+        updated_by: user?.id,
+        is_self_update: true
+      });
 
       setProfileSuccess(true);
 
