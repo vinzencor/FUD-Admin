@@ -4,10 +4,12 @@ import { useAuthStore } from '../store/authStore';
 import { Lock, Mail, Shield, CheckCircle } from 'lucide-react';
 import { supabase } from '../supabaseClient';
 import { UserRole } from '../supabaseClient';
+import { useAuditLog } from '../hooks/useAuditLog';
 
 export function Login() {
   const navigate = useNavigate();
   const login = useAuthStore((state) => state.login);
+  const { logLogin, logFailedLogin } = useAuditLog();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [isLoading, setIsLoading] = useState(false);
@@ -131,6 +133,14 @@ export function Login() {
         regions: data.user.user_metadata?.regions || []
       });
 
+      // Log successful login
+      await logLogin(data.user.id, {
+        user_name: userName,
+        user_email: data.user.email,
+        user_role: userRole,
+        login_method: 'email_password'
+      });
+
       // Small delay to show success message, then navigate
       setTimeout(() => {
         navigate(userRole === 'super_admin' ? '/super-admin/dashboard' : '/admin/dashboard');
@@ -138,6 +148,13 @@ export function Login() {
     } catch (err: any) {
       console.error('Login error:', err);
       setError('An error occurred during login');
+
+      // Log failed login attempt
+      await logFailedLogin({
+        email: email,
+        reason: err.message || 'Unknown error',
+        error_code: err.code || 'unknown'
+      });
     } finally {
       setIsLoading(false);
       setIsAuthorizing(false);

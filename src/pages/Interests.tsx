@@ -8,6 +8,7 @@ import {
   AdminLocation,
   getLocationFilteredUserIds
 } from '../services/locationAdminService';
+import { useAuditLog } from '../hooks/useAuditLog';
 
 /**
  * Interests Page - Displays all interests from all users
@@ -72,6 +73,7 @@ export function Interests() {
   const [exporting, setExporting] = useState(false);
   const [exportMessage, setExportMessage] = useState<string | null>(null);
   const user = useAuthStore((state) => state.user);
+  const { logOrderStatusChanged } = useAuditLog();
 
   useEffect(() => {
     fetchInterests();
@@ -203,6 +205,10 @@ export function Interests() {
     try {
       setLoading(true);
 
+      // Get the interest details for audit logging
+      const interest = interests.find(i => i.id === interestId);
+      const oldStatus = interest?.status;
+
       // Update in database
       const { error } = await supabase
         .from('interests')
@@ -210,6 +216,17 @@ export function Interests() {
         .eq('id', interestId);
 
       if (error) throw error;
+
+      // Log the status change
+      await logOrderStatusChanged(interestId, {
+        old_status: oldStatus,
+        new_status: newStatus,
+        changed_by: user?.id,
+        buyer_name: interest?.buyer?.full_name,
+        seller_name: interest?.listing?.seller_name,
+        product_name: interest?.listing?.name,
+        quantity: interest?.quantity
+      });
 
       // Update local state
       setInterests(interests.map(interest =>

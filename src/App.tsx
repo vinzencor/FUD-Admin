@@ -23,6 +23,7 @@ import { Login } from './pages/Login';
 import { Settings } from './pages/Settings';
 import { useAuthStore } from './store/authStore';
 import { AdminManagement } from './pages/super-admin/AdminManagement';
+import { AuditLog } from './pages/AuditLog';
 
 function ProtectedRoute({
   children,
@@ -98,6 +99,7 @@ function App() {
           <Route path="feedback" element={<Feedback />} />
           <Route path="reports" element={<Reports />} />
           <Route path="admin-management" element={<AdminManagement />} />
+          <Route path="audit-log" element={<AuditLog />} />
           <Route path="settings" element={<Settings />} />
         </Route>
 

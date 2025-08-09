@@ -18,6 +18,7 @@ import { AdminLocationModal } from './AdminLocationModal';
 import { UserAddressData } from '../../services/dataService';
 import { AdminLocation, promoteUserToAdmin } from '../../services/locationAdminService';
 import { useLocationAccess } from '../../hooks/useLocationAccess';
+import { useAuditLog } from '../../hooks/useAuditLog';
 
 interface EnhancedAdminAssignmentProps {
   onAdminAssigned?: () => void;
@@ -31,6 +32,7 @@ export function EnhancedAdminAssignment({
   onSuccess
 }: EnhancedAdminAssignmentProps) {
   const { isSuperAdmin, getLocationSummary } = useLocationAccess();
+  const { logAdminAssigned, logRoleChanged } = useAuditLog();
   const [showUserSelection, setShowUserSelection] = useState(false);
   const [showLocationModal, setShowLocationModal] = useState(false);
   const [selectedUser, setSelectedUser] = useState<UserAddressData | null>(null);
@@ -67,9 +69,28 @@ export function EnhancedAdminAssignment({
       const success = await promoteUserToAdmin(selectedUser.id, location);
       
       if (success) {
+        // Log the admin assignment
+        await logAdminAssigned(selectedUser.id, {
+          assigned_location: location,
+          assigned_by: 'super_admin', // This component is only accessible to super admins
+          user_name: selectedUser.full_name,
+          user_email: selectedUser.email,
+          location_details: `${location.country}, ${location.state || location.district}, ${location.city}, ${location.zipcode}`
+        });
+
+        // Log the role change
+        await logRoleChanged(selectedUser.id, {
+          old_role: 'user',
+          new_role: 'admin',
+          changed_by: 'super_admin',
+          admin_name: selectedUser.full_name,
+          action_type: 'promotion',
+          assigned_location: location
+        });
+
         onSuccess?.(`Successfully assigned admin role to ${selectedUser.full_name}`);
         onAdminAssigned?.();
-        
+
         // Reset state
         setSelectedUser(null);
         setPreviewLocation(null);
