@@ -3,7 +3,7 @@ import { Dialog, DialogContent, DialogHeader } from '../ui/dialog';
 import { Button } from '../ui/button';
 import { ImageCropper } from './ImageCropper';
 import { Upload, Image as ImageIcon, Loader2, AlertCircle, Check } from 'lucide-react';
-import { uploadCoverImage, saveCoverImage, validateImageFile } from '../../services/coverImageService';
+import { uploadCoverImage, saveCoverImage, validateImageFile, validateImageDimensions, COVER_IMAGE_REQUIREMENTS } from '../../services/coverImageService';
 import { useAuthStore } from '../../store/authStore';
 
 interface CoverImageModalProps {
@@ -29,6 +29,9 @@ export function CoverImageModal({ isOpen, onClose, onImageUpdated }: CoverImageM
   const [imageName, setImageName] = useState<string>('');
   const [error, setError] = useState<string>('');
   const [isUploading, setIsUploading] = useState(false);
+  const [warnings, setWarnings] = useState<string[]>([]);
+  const [recommendations, setRecommendations] = useState<string[]>([]);
+  const [imageDimensions, setImageDimensions] = useState<{ width: number; height: number } | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const resetModal = () => {
@@ -40,6 +43,9 @@ export function CoverImageModal({ isOpen, onClose, onImageUpdated }: CoverImageM
     setImageName('');
     setError('');
     setIsUploading(false);
+    setWarnings([]);
+    setRecommendations([]);
+    setImageDimensions(null);
   };
 
   const handleClose = () => {
@@ -58,14 +64,33 @@ export function CoverImageModal({ isOpen, onClose, onImageUpdated }: CoverImageM
     }
 
     setError('');
+    setWarnings(validation.warnings || []);
     setSelectedFile(file);
     setImageName(file.name.split('.')[0]);
 
-    // Create preview URL
+    // Create preview URL and validate dimensions
     const reader = new FileReader();
     reader.onload = (e) => {
-      setImagePreviewUrl(e.target?.result as string);
-      setCurrentStep('crop');
+      const img = new Image();
+      img.onload = () => {
+        const dimensionValidation = validateImageDimensions(img.width, img.height);
+
+        if (!dimensionValidation.valid) {
+          setError(dimensionValidation.error || 'Invalid image dimensions');
+          return;
+        }
+
+        setImageDimensions({ width: img.width, height: img.height });
+        setWarnings([
+          ...(validation.warnings || []),
+          ...(dimensionValidation.warnings || [])
+        ]);
+        setRecommendations(dimensionValidation.recommendations || []);
+
+        setImagePreviewUrl(e.target?.result as string);
+        setCurrentStep('crop');
+      };
+      img.src = e.target?.result as string;
     };
     reader.readAsDataURL(file);
   };
@@ -126,8 +151,23 @@ export function CoverImageModal({ isOpen, onClose, onImageUpdated }: CoverImageM
         <ImageIcon className="mx-auto h-12 w-12 text-gray-400" />
         <h3 className="mt-2 text-lg font-medium text-gray-900">Upload Cover Image</h3>
         <p className="mt-1 text-sm text-gray-500">
-          Choose a high-quality image that will be displayed at full width
+          Choose a high-quality image for the website cover page
         </p>
+      </div>
+
+      {/* Image Requirements */}
+      <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+        <h4 className="text-sm font-medium text-blue-900 mb-2">📏 Image Requirements</h4>
+        <div className="space-y-1 text-xs text-blue-800">
+          <p><strong>✅ {COVER_IMAGE_REQUIREMENTS.DISPLAY_TEXT.RECOMMENDED}</strong></p>
+          <p>• {COVER_IMAGE_REQUIREMENTS.DISPLAY_TEXT.MIN_SIZE}</p>
+          <p>• {COVER_IMAGE_REQUIREMENTS.DISPLAY_TEXT.MAX_SIZE}</p>
+          <p>• {COVER_IMAGE_REQUIREMENTS.DISPLAY_TEXT.FILE_SIZE}</p>
+          <p>• {COVER_IMAGE_REQUIREMENTS.DISPLAY_TEXT.FORMATS}</p>
+        </div>
+        <div className="mt-2 text-xs text-blue-700">
+          <p><strong>💡 Tip:</strong> Use landscape images with a wide aspect ratio for best results!</p>
+        </div>
       </div>
 
       <div
@@ -138,8 +178,7 @@ export function CoverImageModal({ isOpen, onClose, onImageUpdated }: CoverImageM
         <p className="mt-2 text-sm text-gray-600">
           <span className="font-medium text-primary-600">Click to upload</span> or drag and drop
         </p>
-        <p className="text-xs text-gray-500">PNG, JPG, WebP up to 5MB</p>
-        <p className="text-xs text-blue-600 mt-1">You can crop to any size - perfect for full-width display</p>
+        <p className="text-xs text-gray-500">Select your cover image file</p>
       </div>
 
       <input
@@ -154,6 +193,49 @@ export function CoverImageModal({ isOpen, onClose, onImageUpdated }: CoverImageM
         <div className="flex items-center space-x-2 text-red-600 bg-red-50 p-3 rounded-md">
           <AlertCircle className="h-4 w-4" />
           <span className="text-sm">{error}</span>
+        </div>
+      )}
+
+      {warnings.length > 0 && (
+        <div className="bg-yellow-50 border border-yellow-200 p-3 rounded-md">
+          <div className="flex items-start space-x-2">
+            <AlertCircle className="h-4 w-4 text-yellow-600 mt-0.5" />
+            <div>
+              <p className="text-sm font-medium text-yellow-800">Warnings:</p>
+              <ul className="text-xs text-yellow-700 mt-1 space-y-1">
+                {warnings.map((warning, index) => (
+                  <li key={index}>• {warning}</li>
+                ))}
+              </ul>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {recommendations.length > 0 && (
+        <div className="bg-green-50 border border-green-200 p-3 rounded-md">
+          <div className="flex items-start space-x-2">
+            <Check className="h-4 w-4 text-green-600 mt-0.5" />
+            <div>
+              <p className="text-sm font-medium text-green-800">Recommendations:</p>
+              <ul className="text-xs text-green-700 mt-1 space-y-1">
+                {recommendations.map((rec, index) => (
+                  <li key={index}>• {rec}</li>
+                ))}
+              </ul>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {imageDimensions && (
+        <div className="bg-gray-50 border border-gray-200 p-3 rounded-md">
+          <p className="text-xs text-gray-600">
+            <strong>Image Size:</strong> {imageDimensions.width} × {imageDimensions.height} pixels
+            <span className="ml-2">
+              (Ratio: {(imageDimensions.width / imageDimensions.height).toFixed(2)}:1)
+            </span>
+          </p>
         </div>
       )}
     </div>

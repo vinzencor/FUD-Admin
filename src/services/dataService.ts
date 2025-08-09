@@ -1382,3 +1382,111 @@ export async function fetchRecentOrders(adminLocation?: AdminLocation | null): P
     return [];
   }
 }
+
+/**
+ * Safely delete a user and all related records (cascading deletion)
+ * This function handles foreign key constraints by deleting related records first
+ */
+export async function deleteUserWithCascade(userId: string): Promise<{ success: boolean; error?: string }> {
+  try {
+    console.log('Starting cascading deletion for user:', userId);
+
+    // Step 1: Delete cover images created by this user
+    const { error: coverImagesError } = await supabase
+      .from('cover_images')
+      .delete()
+      .eq('created_by', userId);
+
+    if (coverImagesError) {
+      console.error('Error deleting cover images:', coverImagesError);
+      // Continue anyway, this might not exist
+    }
+
+    // Step 2: Delete user's listings/products
+    const { error: listingsError } = await supabase
+      .from('listings')
+      .delete()
+      .eq('seller_id', userId);
+
+    if (listingsError) {
+      console.error('Error deleting listings:', listingsError);
+      // Continue anyway
+    }
+
+    // Step 3: Delete interests where user is buyer or seller
+    const { error: interestsError } = await supabase
+      .from('interests')
+      .delete()
+      .or(`buyer_id.eq.${userId},seller_id.eq.${userId}`);
+
+    if (interestsError) {
+      console.error('Error deleting interests:', interestsError);
+      // Continue anyway
+    }
+
+    // Step 4: Delete reviews by this user
+    const { error: reviewsError } = await supabase
+      .from('reviews')
+      .delete()
+      .eq('user_id', userId);
+
+    if (reviewsError) {
+      console.error('Error deleting reviews:', reviewsError);
+      // Continue anyway
+    }
+
+    // Step 5: Delete feedback by this user
+    const { error: feedbackError } = await supabase
+      .from('feedback')
+      .delete()
+      .eq('user_id', userId);
+
+    if (feedbackError) {
+      console.error('Error deleting feedback:', feedbackError);
+      // Continue anyway
+    }
+
+    // Step 6: Delete seller profile
+    const { error: sellerProfileError } = await supabase
+      .from('seller_profiles')
+      .delete()
+      .eq('user_id', userId);
+
+    if (sellerProfileError) {
+      console.error('Error deleting seller profile:', sellerProfileError);
+      // Continue anyway
+    }
+
+    // Step 7: Delete featured sellers entry
+    const { error: featuredSellersError } = await supabase
+      .from('featured_sellers')
+      .delete()
+      .eq('user_id', userId);
+
+    if (featuredSellersError) {
+      console.error('Error deleting featured sellers:', featuredSellersError);
+      // Continue anyway
+    }
+
+    // Step 8: Delete any other related records (add more as needed)
+    // You can add more tables here if there are other foreign key relationships
+
+    // Step 9: Finally delete the user record
+    const { error: userError } = await supabase
+      .from('users')
+      .delete()
+      .eq('id', userId);
+
+    if (userError) {
+      console.error('Error deleting user:', userError);
+      return { success: false, error: `Failed to delete user: ${userError.message}` };
+    }
+
+    console.log('Successfully deleted user and all related records:', userId);
+    return { success: true };
+
+  } catch (error: any) {
+    console.error('Error in deleteUserWithCascade:', error);
+    return { success: false, error: error.message || 'Unknown error occurred during deletion' };
+  }
+}

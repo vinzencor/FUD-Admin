@@ -219,11 +219,13 @@ export function Settings() {
       }
 
       // Update local auth store
-      updateUser({
-        ...user,
-        name: profileForm.name,
-        email: profileForm.email
-      });
+      if (user) {
+        updateUser({
+          ...user,
+          name: profileForm.name,
+          email: profileForm.email
+        });
+      }
 
       setProfileSuccess(true);
 

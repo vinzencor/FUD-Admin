@@ -257,9 +257,7 @@ export function Login() {
                 Only users with <span className="font-medium text-blue-600">Admin</span> or{' '}
                 <span className="font-medium text-purple-600">Super Admin</span> roles can access this panel.
               </p>
-              <p className="text-xs text-gray-500 mt-1">
-                Super admin privileges are automatically assigned to authorized users.
-              </p>
+              
             </div>
           </div>
         </div>
