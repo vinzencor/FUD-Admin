@@ -67,17 +67,20 @@ export function HeroSection({
 
   return (
     <>
-      <div
-        className={`relative h-[350px] md:h-[450px] bg-cover bg-center ${className}`}
-        style={{
-          backgroundImage: `url("${backgroundImageUrl}")`,
-        }}
-      >
+      <div className={`relative ${className}`}>
+        {/* Cover Image - Natural Height */}
+        <img
+          src={backgroundImageUrl}
+          alt="Cover image"
+          className="w-full h-auto object-contain"
+          style={{ minHeight: '300px', maxHeight: '80vh' }}
+        />
+
         {/* Overlay for better text readability */}
         <div className="absolute inset-0 bg-black bg-opacity-40" />
-        
+
         {/* Content */}
-        <div className="relative h-full flex items-center justify-center">
+        <div className="absolute inset-0 flex items-center justify-center">
           <div className="text-center text-white px-4 max-w-4xl mx-auto">
             {children ? (
               children
