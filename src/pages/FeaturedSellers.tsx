@@ -348,7 +348,7 @@ export function FeaturedSellers() {
                         <div className="h-10 w-10 flex-shrink-0">
                           {seller.profile_image || seller.store_profile_image ? (
                             <img
-                              className="h-10 w-10 rounded-full object-cover"
+                              className="h-10 w-10 rounded-full object-contain"
                               src={seller.profile_image || seller.store_profile_image}
                               alt={seller.full_name}
                             />
@@ -510,7 +510,7 @@ export function FeaturedSellers() {
                         <div className="h-10 w-10 rounded-full bg-gray-100 flex items-center justify-center">
                           {user.profile_image ? (
                             <img
-                              className="h-10 w-10 rounded-full object-cover"
+                              className="h-10 w-10 rounded-full object-contain"
                               src={user.profile_image}
                               alt={user.full_name}
                             />

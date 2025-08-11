@@ -13,8 +13,13 @@ interface FarmerCardProps {
 export function FarmerCard({ name, location, rating, image, phone, products }: FarmerCardProps) {
   return (
     <div className="bg-white rounded-lg shadow-md overflow-hidden">
-      <div className="h-48 overflow-hidden">
-        <img src={image} alt={name} className="w-full h-full object-cover" />
+      <div className="overflow-hidden">
+        <img
+          src={image}
+          alt={name}
+          className="w-full h-auto object-contain"
+          style={{ minHeight: '200px', maxHeight: '300px' }}
+        />
       </div>
       <div className="p-4">
         <h3 className="text-lg font-semibold text-gray-900">{name}</h3>

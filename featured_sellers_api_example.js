@@ -75,16 +75,17 @@ export function FeaturedSellersSection() {
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {featuredSellers.map((seller) => (
             <div key={seller.user_id} className="bg-white rounded-lg shadow-md overflow-hidden hover:shadow-lg transition-shadow">
-              {/* Seller Image */}
-              <div className="h-48 bg-gray-200 relative">
+              {/* Seller Image - Natural Height */}
+              <div className="bg-gray-200 relative">
                 {seller.store_cover_image || seller.profile_image ? (
                   <img
                     src={seller.store_cover_image || seller.profile_image}
                     alt={seller.store_name || seller.full_name}
-                    className="w-full h-full object-cover"
+                    className="w-full h-auto object-contain"
+                    style={{ minHeight: '200px', maxHeight: '400px' }}
                   />
                 ) : (
-                  <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-blue-400 to-purple-500">
+                  <div className="w-full h-48 flex items-center justify-center bg-gradient-to-br from-blue-400 to-purple-500">
                     <span className="text-white text-2xl font-bold">
                       {(seller.store_name || seller.full_name).charAt(0)}
                     </span>
