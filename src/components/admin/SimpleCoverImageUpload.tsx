@@ -86,7 +86,8 @@ export function SimpleCoverImageUpload({ onImageUploaded, currentImageUrl }: Sim
           <img
             src={currentImageUrl}
             alt="Current cover image"
-            className="w-full h-48 object-cover rounded-lg border border-gray-200"
+            className="w-full h-auto object-contain rounded-lg border border-gray-200"
+            style={{ minHeight: '200px', maxHeight: '400px' }}
           />
           <div className="absolute top-2 right-2 bg-black bg-opacity-50 text-white text-xs px-2 py-1 rounded">
             Current Cover

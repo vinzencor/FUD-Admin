@@ -1087,7 +1087,8 @@ export function Farmers() {
                       <img
                         src={selectedSellerData.profile_image}
                         alt="Profile"
-                        className="w-full h-48 object-cover rounded-lg"
+                        className="w-full h-auto object-contain rounded-lg"
+                        style={{ minHeight: '200px', maxHeight: '400px' }}
                         onError={(e) => {
                           e.currentTarget.style.display = 'none';
                         }}
@@ -1103,7 +1104,8 @@ export function Farmers() {
                       <img
                         src={selectedSellerData.cover_image}
                         alt="Cover"
-                        className="w-full h-48 object-cover rounded-lg"
+                        className="w-full h-auto object-contain rounded-lg"
+                        style={{ minHeight: '200px', maxHeight: '400px' }}
                         onError={(e) => {
                           e.currentTarget.style.display = 'none';
                         }}
