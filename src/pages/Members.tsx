@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Search, MoreVertical, Trash2, Crown, Store, Download, AlertTriangle, CheckCircle } from 'lucide-react';
+import { Search, MoreVertical, Trash2, Crown, Store, Download, AlertTriangle, CheckCircle, UserX, UserCheck } from 'lucide-react';
 import { format, addMonths } from 'date-fns';
 
 import { Button } from '../components/ui/button';
@@ -192,6 +192,19 @@ export function Members() {
           console.error('Failed to fetch seller profiles:', sellerError);
         }
 
+        // Get suspended users from suspended_users table
+        const { data: suspendedUsers, error: suspendedError } = await supabase
+          .from('suspended_users')
+          .select('user_id')
+          .eq('is_active', true);
+
+        if (suspendedError) {
+          console.log('Suspended users table not found or error:', suspendedError);
+        }
+
+        // Create a set of suspended user IDs for quick lookup
+        const suspendedUserIds = new Set(suspendedUsers?.map(su => su.user_id) || []);
+
         const formatted = usersData.map((row) => {
           // Get role from database, default to 'user' if not set
           const userRole = row.role || 'user';
@@ -230,12 +243,15 @@ export function Members() {
           const fullAddress = addressParts.length > 0 ? addressParts.join(', ') : 'Address not provided';
           const shortLocation = `${row.city || ''}, ${row.state || ''}`.replace(/^,\s*|,\s*$/g, '');
 
+          // Determine user status - check if user is in suspended users list
+          const userStatus: 'active' | 'suspended' = suspendedUserIds.has(row.id) ? 'suspended' : 'active';
+
           return {
             id: row.id,
             name: row.full_name || 'Unknown',
             email: row.email || '',
             phone: row.mobile_phone || '',
-            status: 'active' as 'active',
+            status: userStatus,
             location: shortLocation || 'Location not provided',
             joinDate: row.created_at,
             lastActive: row.created_at,
@@ -394,6 +410,75 @@ export function Members() {
     window.location.reload();
   };
 
+  const handleSuspendUser = async (member: Member) => {
+    // Only super admin can suspend/unsuspend users
+    if (user?.role !== 'super_admin') {
+      alert('Only Super Admins can suspend/unsuspend users.');
+      return;
+    }
+
+    const newStatus = member.status === 'active' ? 'suspended' : 'active';
+    const action = newStatus === 'suspended' ? 'suspend' : 'unsuspend';
+
+    try {
+      // Since the users table doesn't have status columns, we'll use a separate approach
+      // We'll create/use a suspended_users table to track suspended users
+
+      // Import suspension functions
+      const { suspendUser, unsuspendUser } = await import('../services/suspensionService');
+
+      if (newStatus === 'suspended') {
+        // Suspend user using the service
+        const result = await suspendUser(member.id, user?.id || '', 'Suspended by admin');
+
+        if (!result.success) {
+          throw new Error(result.error || 'Failed to suspend user');
+        }
+
+        console.log('✅ User suspended successfully');
+      } else {
+        // Unsuspend user using the service
+        const result = await unsuspendUser(member.id);
+
+        if (!result.success) {
+          throw new Error(result.error || 'Failed to unsuspend user');
+        }
+
+        console.log('✅ User unsuspended successfully');
+      }
+
+      // Note: Content suspension/reactivation removed since tables don't exist yet
+      // When you have listings/products/services tables, you can add suspension logic here
+      console.log(`User ${member.name} has been ${action}ed. Content suspension skipped (tables not configured).`);
+
+      // Simple console logging for now (audit logging has RLS issues)
+      console.log(`Suspension action logged: ${action} user ${member.name} (${member.email}) by ${user?.email}`);
+
+      // Update local state
+      setMembers(members.map(m =>
+        m.id === member.id
+          ? { ...m, status: newStatus }
+          : m
+      ));
+
+      alert(`User ${member.name} has been ${action}ed successfully.`);
+
+    } catch (error) {
+      console.error(`Error ${action}ing user:`, error);
+
+      // Provide more specific error message
+      let errorMessage = `Failed to ${action} user. `;
+      if (error && typeof error === 'object' && 'message' in error) {
+        errorMessage += `Error: ${error.message}`;
+      } else if (error && typeof error === 'object' && 'details' in error) {
+        errorMessage += `Details: ${error.details}`;
+      } else {
+        errorMessage += 'Please check if the user status column exists in the database.';
+      }
+
+      alert(errorMessage);
+    }
+  };
 
   const handleRoleChange = async (memberId: string, newRole: 'user' | 'admin' | 'super_admin') => {
     try {
@@ -660,7 +745,15 @@ export function Members() {
               >
                 <div className="flex items-start justify-between mb-3">
                   <div className="flex-1">
-                    <h3 className="font-medium text-gray-900 text-sm">{member.name}</h3>
+                    <div className="flex items-center gap-2">
+                      <h3 className="font-medium text-gray-900 text-sm">{member.name}</h3>
+                      {member.status === 'suspended' && (
+                        <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800">
+                          <UserX className="h-3 w-3 mr-1" />
+                          Suspended
+                        </span>
+                      )}
+                    </div>
                     <p className="text-xs text-gray-500 mt-1">{member.email}</p>
                   </div>
 
@@ -749,6 +842,35 @@ export function Members() {
                       </div>
                     )}
 
+                    {/* Suspend/Unsuspend Button */}
+                    <div className="flex justify-center">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={(e) => {
+                          e.stopPropagation(); // Prevent card click
+                          handleSuspendUser(member);
+                        }}
+                        className={`flex items-center gap-1 text-xs min-w-[120px] ${
+                          member.status === 'active'
+                            ? 'text-orange-600 hover:text-orange-700'
+                            : 'text-green-600 hover:text-green-700'
+                        }`}
+                      >
+                        {member.status === 'active' ? (
+                          <>
+                            <UserX className="h-3 w-3" />
+                            Suspend User
+                          </>
+                        ) : (
+                          <>
+                            <UserCheck className="h-3 w-3" />
+                            Unsuspend User
+                          </>
+                        )}
+                      </Button>
+                    </div>
+
                     {/* Delete Button */}
                     <div className="flex justify-center">
                       <Button
@@ -831,7 +953,15 @@ export function Members() {
                   <td className="px-3 py-4">
                     <div className="flex items-center">
                       <div>
-                        <div className="text-sm font-medium text-gray-900">{member.name}</div>
+                        <div className="flex items-center gap-2">
+                          <div className="text-sm font-medium text-gray-900">{member.name}</div>
+                          {member.status === 'suspended' && (
+                            <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800">
+                              <UserX className="h-3 w-3 mr-1" />
+                              Suspended
+                            </span>
+                          )}
+                        </div>
                         <div className="text-sm text-gray-500">{member.email}</div>
                       </div>
                     </div>
@@ -914,6 +1044,33 @@ export function Members() {
                               Edit Location
                             </Button>
                           )}
+
+                          {/* Suspend/Unsuspend Button */}
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={(e) => {
+                              e.stopPropagation(); // Prevent row click
+                              handleSuspendUser(member);
+                            }}
+                            className={`flex items-center gap-1 min-w-[120px] ${
+                              member.status === 'active'
+                                ? 'text-orange-600 hover:text-orange-700'
+                                : 'text-green-600 hover:text-green-700'
+                            }`}
+                          >
+                            {member.status === 'active' ? (
+                              <>
+                                <UserX className="h-3 w-3" />
+                                Suspend User
+                              </>
+                            ) : (
+                              <>
+                                <UserCheck className="h-3 w-3" />
+                                Unsuspend User
+                              </>
+                            )}
+                          </Button>
 
                           {/* Delete Button */}
                           <Button

@@ -240,23 +240,13 @@ export function UserProfileModal({ isOpen, onClose, user, title = "User Profile"
               </h3>
 
               {/* Scrollable Address Container */}
-              <div className="max-h-80 overflow-y-auto space-y-4 pr-2" style={{scrollbarWidth: 'thin'}}>
-                <style jsx>{`
-                  div::-webkit-scrollbar {
-                    width: 6px;
-                  }
-                  div::-webkit-scrollbar-track {
-                    background: #f1f5f9;
-                    border-radius: 3px;
-                  }
-                  div::-webkit-scrollbar-thumb {
-                    background: #cbd5e1;
-                    border-radius: 3px;
-                  }
-                  div::-webkit-scrollbar-thumb:hover {
-                    background: #94a3b8;
-                  }
-                `}</style>
+              <div
+                className="max-h-80 overflow-y-auto space-y-4 pr-2"
+                style={{
+                  scrollbarWidth: 'thin',
+                  scrollbarColor: '#cbd5e1 #f1f5f9'
+                }}
+              >
                 {/* Business Address (if available) */}
                 {user.has_business_address && (
                   <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">

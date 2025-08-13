@@ -1,10 +1,11 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuthStore } from '../store/authStore';
-import { Lock, Mail, Shield, CheckCircle } from 'lucide-react';
+import { Lock, Mail, Shield, CheckCircle, UserX } from 'lucide-react';
 import { supabase } from '../supabaseClient';
 import { UserRole } from '../supabaseClient';
 import { useAuditLog } from '../hooks/useAuditLog';
+import { isUserSuspended, getUserSuspensionDetails } from '../services/suspensionService';
 
 export function Login() {
   const navigate = useNavigate();
@@ -47,6 +48,34 @@ export function Login() {
 
       // Check if this is the super admin user
       const isSuperAdmin = data.user.email === SUPER_ADMIN_EMAIL;
+
+      // Check if user is suspended (before role checking) - but only for non-super-admin
+      if (!isSuperAdmin) {
+        console.log('🔍 Starting suspension check for user:', data.user.id, data.user.email);
+        try {
+          const userSuspended = await isUserSuspended(data.user.id);
+          console.log('🎯 Suspension check result:', userSuspended);
+
+          if (userSuspended) {
+            console.log('🚫 User is suspended, blocking login');
+            const suspensionDetails = await getUserSuspensionDetails(data.user.id);
+            const suspendedDate = suspensionDetails?.suspended_at
+              ? new Date(suspensionDetails.suspended_at).toLocaleDateString()
+              : 'Unknown';
+
+            setError(`Account suspended on ${suspendedDate}. Reason: ${suspensionDetails?.reason || 'No reason provided'}. Please contact an administrator.`);
+            await supabase.auth.signOut(); // Sign them out immediately
+            return;
+          }
+
+          console.log('✅ User is not suspended, continuing login process');
+        } catch (suspensionError) {
+          console.warn('⚠️ Suspension check failed, allowing login:', suspensionError);
+          // Continue with login if suspension check fails
+        }
+      } else {
+        console.log('🔑 Super admin user - skipping suspension check');
+      }
 
       // Get user role and details from the users table
       let userRole = null;
@@ -170,7 +199,17 @@ export function Login() {
           </h2>
           
           {error && (
-            <div className="mb-4 p-3 bg-red-50 text-red-700 rounded-md text-sm">
+            <div className={`mb-4 p-3 rounded-md text-sm ${
+              error.includes('suspended')
+                ? 'bg-orange-50 text-orange-700 border border-orange-200'
+                : 'bg-red-50 text-red-700'
+            }`}>
+              {error.includes('suspended') && (
+                <div className="flex items-center mb-2">
+                  <UserX className="h-4 w-4 mr-2" />
+                  <span className="font-medium">Account Suspended</span>
+                </div>
+              )}
               {error}
             </div>
           )}
